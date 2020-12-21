@@ -1,4 +1,4 @@
-package crypto
+package gw_crypto
 
 import (
 	"crypto/aes"
