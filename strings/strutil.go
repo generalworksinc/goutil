@@ -60,6 +60,9 @@ const (
 	rs6LetterIdxMax  = 63 / rs6LetterIdxBits
 )
 
+// please set random seed before using.
+// for example.
+// rand.Seed(time.Now().UnixNano())
 func RandString6(n int) string {
 	b := make([]byte, n)
 	cache, remain := randSrc.Int63(), rs6LetterIdxMax

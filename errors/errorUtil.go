@@ -26,11 +26,31 @@ func errorLog(err error, objList ...interface{}) {
 	log.Println(strings.Join(errorMessageList, "\n"))
 	sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
 }
-func Error(err error, objList ...interface{}) error {
+
+func ReturnError(err error, objList ...interface{}) error {
 	errorLog(err, objList)
 	return err
 }
-func CheckErrorWithFunc(err error, f func(), objList ...interface{}) {
+func ReturnErrorStr(errStr string) error {
+	err := errors.New(errStr)
+	errorLog(err)
+	return err
+}
+
+func PanicError(err error, objList ...interface{}) {
+	if err != nil {
+		errorLog(err, objList)
+		panic(err)
+	}
+}
+func PanicErrorStr(errStr string, objList ...interface{}) {
+	if errStr != "" {
+		err := errors.New(errStr)
+		errorLog(err, objList)
+		panic(err)
+	}
+}
+func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 	if err != nil {
 		errorLog(err, objList)
 		//c.Status(status)
@@ -38,24 +58,15 @@ func CheckErrorWithFunc(err error, f func(), objList ...interface{}) {
 		panic(err)
 	}
 }
-func CheckError(err error, objList ...interface{}) {
+
+func PrintError(err error, objList ...interface{}) {
 	if err != nil {
 		errorLog(err, objList)
-		panic(err)
 	}
 }
-
-func ErrorPrint(err error, objList ...interface{}) {
-	errorLog(err, objList)
-}
-
-func ErrorStr(errStr string) error {
-	err := errors.New(errStr)
-	errorLog(err)
-	return err
-}
-
-func ErrorStrPrint(errStr string) {
-	err := errors.New(errStr)
-	errorLog(err)
+func PrintErrorStr(errStr string, objList ...interface{}) {
+	if errStr != "" {
+		err := errors.New(errStr)
+		errorLog(err, objList)
+	}
 }
