@@ -3,11 +3,9 @@ package gw_errors
 import (
 	"errors"
 	"fmt"
-	//"github.com/getsentry/sentry-go"
-	"strings"
-
-	//"github.com/gofiber/fiber/v2"
+	"github.com/getsentry/sentry-go"
 	"log"
+	"strings"
 	//"reflect"
 	"runtime"
 )
@@ -26,7 +24,7 @@ func errorLog(err error, objList ...interface{}) {
 
 	//logging & send to sentry server
 	log.Println(strings.Join(errorMessageList, "\n"))
-	//sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+	sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
 }
 func Error(err error, objList ...interface{}) error {
 	errorLog(err, objList)

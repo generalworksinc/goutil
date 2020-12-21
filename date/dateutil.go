@@ -4,21 +4,6 @@ import (
 	"time"
 )
 
-//func TruncDateAndGetLastSecondOfMonthByString(targetYYYYMM string, addMonths int) (*time.Time, *time.Time, error) {
-//	jst, _ := time.LoadLocation("Asia/Tokyo")
-//	targetDateStart, err := time.ParseInLocation("20060102", targetYYYYMM, jst)
-//	if err != nil {
-//		return nil, nil, err
-//	}
-//	if addMonths > 0 {
-//		targetDateStart = targetDateStart.AddDate(0, addMonths, 0)
-//	}
-//	toDate := targetDateStart.AddDate(0, 1, 0)
-//	toDate = time.Date(toDate.Year(), toDate.Month(), 1, 0, 0, 0, 0, jst)
-//	toDate = toDate.Add(-time.Duration(1) * time.Second)
-//	return &targetDateStart, &toDate, nil
-//}
-
 func GetLastDayOfMonth(targetTime time.Time, location *time.Location) time.Time {
 	firstOfMonth := time.Date(targetTime.Year(), targetTime.Month(), 1, 0, 0, 0, 0, location)
 	firstOfNextMonth := firstOfMonth.AddDate(0, 1, 0)
