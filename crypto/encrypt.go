@@ -1,4 +1,4 @@
-package gw_encode
+package crypto
 
 import (
 	"crypto/aes"
