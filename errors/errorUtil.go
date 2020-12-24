@@ -28,13 +28,17 @@ func errorLog(err error, objList ...interface{}) {
 }
 
 func ReturnError(err error, objList ...interface{}) error {
-	errorLog(err, objList)
+	if err != nil {
+		errorLog(err, objList)
+	}
 	return err
 }
 func ReturnErrorStr(errStr string) error {
-	err := errors.New(errStr)
-	errorLog(err)
-	return err
+	if errStr != "" {
+		err := errors.New(errStr)
+		errorLog(err)
+	}
+	return nil
 }
 
 func PanicError(err error, objList ...interface{}) {
