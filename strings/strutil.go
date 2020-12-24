@@ -40,12 +40,18 @@ func IsBlank(s string) bool {
 }
 
 func StreamToByte(stream io.Reader) []byte {
+	if stream == nil {
+		return []byte{}
+	}
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(stream)
 	return buf.Bytes()
 }
 
 func StreamToString(stream io.Reader) string {
+	if stream == nil {
+		return ""
+	}
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(stream)
 	return buf.String()
