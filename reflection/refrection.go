@@ -14,13 +14,14 @@ func GetStructFields(st interface{}, isSnakeCase bool) []string {
 		// フィールド名の取得
 		//フィールドがstructだった場合、再帰的に取得
 		if t.Field(i).Type.Kind() == reflect.Struct {
-			newInstance := reflect.New(t.Field(i).Type).Elem()
-			fields = append(fields, GetStructFields(newInstance, isSnakeCase)...)
-		}
-		if isSnakeCase {
-			fields = append(fields, gw_strings.ToSnakeCase(t.Field(i).Name))
+			f := v.Field(i)
+			fields = append(fields, GetStructFields(f.Interface(), isSnakeCase)...)
 		} else {
-			fields = append(fields, t.Field(i).Name)
+			if isSnakeCase {
+				fields = append(fields, gw_strings.ToSnakeCase(t.Field(i).Name))
+			} else {
+				fields = append(fields, t.Field(i).Name)
+			}
 		}
 	}
 	return fields
