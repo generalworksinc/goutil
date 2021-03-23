@@ -21,9 +21,9 @@ func getStructFields(v reflect.Value, isSnakeCase bool, prefix string) []string 
 			t := reflect.Indirect(v).Type()
 			field := prefix
 			if isSnakeCase {
-				field = gw_strings.ToSnakeCase(t.Field(i).Name)
+				field += gw_strings.ToSnakeCase(t.Field(i).Name)
 			} else {
-				field = t.Field(i).Name
+				field += t.Field(i).Name
 			}
 			fields = append(fields, field)
 		}
@@ -44,9 +44,9 @@ func GetStructFields(st interface{}, isSnakeCase bool, prefix string) []string {
 			fields = append(fields, getStructFields(f, isSnakeCase, prefix)...)
 		} else {
 			if isSnakeCase {
-				fields = append(fields, gw_strings.ToSnakeCase(t.Field(i).Name))
+				fields = append(fields, prefix+gw_strings.ToSnakeCase(t.Field(i).Name))
 			} else {
-				fields = append(fields, t.Field(i).Name)
+				fields = append(fields, prefix+t.Field(i).Name)
 			}
 		}
 	}
