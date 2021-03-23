@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func getStructFields(v reflect.Value, isSnakeCase bool) []string {
+func getStructFields(v reflect.Value, isSnakeCase bool, prefix string) []string {
 	fields := []string{}
 	for i := 0; i < v.NumField(); i++ {
 		structValue := reflect.Indirect(v)
@@ -16,19 +16,21 @@ func getStructFields(v reflect.Value, isSnakeCase bool) []string {
 		//フィールドがstructだった場合、再帰的に取得
 		if t.Field(i).Type.Kind() == reflect.Struct && strings.Contains(t.Field(i).Tag.Get("xorm"), "extends") {
 			f := v.Field(i)
-			fields = append(fields, getStructFields(f, isSnakeCase)...)
+			fields = append(fields, getStructFields(f, isSnakeCase, prefix)...)
 		} else {
 			t := reflect.Indirect(v).Type()
+			field := prefix
 			if isSnakeCase {
-				fields = append(fields, gw_strings.ToSnakeCase(t.Field(i).Name))
+				field = gw_strings.ToSnakeCase(t.Field(i).Name)
 			} else {
-				fields = append(fields, t.Field(i).Name)
+				field = t.Field(i).Name
 			}
+			fields = append(fields, field)
 		}
 	}
 	return fields
 }
-func GetStructFields(st interface{}, isSnakeCase bool) []string {
+func GetStructFields(st interface{}, isSnakeCase bool, prefix string) []string {
 	fields := []string{}
 	val := reflect.ValueOf(st)
 	v := reflect.Indirect(val)
@@ -39,7 +41,7 @@ func GetStructFields(st interface{}, isSnakeCase bool) []string {
 		//フィールドがstructだった場合、再帰的に取得
 		if t.Field(i).Type.Kind() == reflect.Struct && strings.Contains(t.Field(i).Tag.Get("xorm"), "extends") {
 			f := v.Field(i)
-			fields = append(fields, getStructFields(f, isSnakeCase)...)
+			fields = append(fields, getStructFields(f, isSnakeCase, prefix)...)
 		} else {
 			if isSnakeCase {
 				fields = append(fields, gw_strings.ToSnakeCase(t.Field(i).Name))
