@@ -15,7 +15,7 @@ type Set struct {
 func (set *Set) Put(key interface{}) {
 	_, ok := set.dataMap[key]
 	if !ok {
-		set.dataMap[key] = ""
+		set.dataMap = map[interface{}]string{}
 	}
 	set.dataMap[key] = ""
 }
@@ -34,7 +34,7 @@ type StringSet struct {
 func (set *StringSet) Put(key string) {
 	_, ok := set.dataMap[key]
 	if !ok {
-		set.dataMap[key] = ""
+		set.dataMap = map[string]string{}
 	}
 	set.dataMap[key] = ""
 }
