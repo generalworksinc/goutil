@@ -30,7 +30,7 @@ type StringSet struct {
 func (set *StringSet) Put(key string) {
 	set.dataMap[key] = ""
 }
-func (set *StringSet) Values(key string) []string {
+func (set *StringSet) Values() []string {
 	keys := []string{}
 	for k, _ := range set.dataMap {
 		keys = append(keys, k)
