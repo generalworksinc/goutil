@@ -13,9 +13,13 @@ type Set struct {
 }
 
 func (set *Set) Put(key interface{}) {
+	_, ok := set.dataMap[key]
+	if !ok {
+		set.dataMap[key] = ""
+	}
 	set.dataMap[key] = ""
 }
-func (set *Set) Values(key interface{}) []interface{} {
+func (set *Set) Values() []interface{} {
 	keys := []interface{}{}
 	for k, _ := range set.dataMap {
 		keys = append(keys, k)
@@ -28,6 +32,10 @@ type StringSet struct {
 }
 
 func (set *StringSet) Put(key string) {
+	_, ok := set.dataMap[key]
+	if !ok {
+		set.dataMap[key] = ""
+	}
 	set.dataMap[key] = ""
 }
 func (set *StringSet) Values() []string {
