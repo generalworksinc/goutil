@@ -25,6 +25,10 @@ func (set *Set) Values() []interface{} {
 	}
 	return keys
 }
+func (set *Set) Contains(key interface{}) bool {
+	_, ok := set.dataMap[key]
+	return ok
+}
 
 type StringSet struct {
 	dataMap map[string]string
@@ -42,4 +46,8 @@ func (set *StringSet) Values() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+func (set *StringSet) Contains(key string) bool {
+	_, ok := set.dataMap[key]
+	return ok
 }
