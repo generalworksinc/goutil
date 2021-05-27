@@ -1,4 +1,4 @@
-package compress
+package gw_compress
 
 import (
 	"bytes"
