@@ -43,6 +43,6 @@ func ExtractString(str string) (string, error) {
 	}
 }
 
-func Extract(zr io.Reader) (io.Reader, error) {
+func Extract(zr io.Reader) (*bzip2.Reader, error) {
 	return bzip2.NewReader(zr, new(bzip2.ReaderConfig))
 }
