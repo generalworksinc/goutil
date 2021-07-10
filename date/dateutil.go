@@ -1,8 +1,47 @@
 package gw_date
 
 import (
+	"errors"
+	"strconv"
 	"time"
 )
+
+type EraJapanese struct {
+	Name  string
+	Start time.Time
+}
+
+var (
+	jstZone = time.FixedZone("JST", 9*60*60)
+	eraList = []EraJapanese{
+		{Name: "令和", Start: time.Date(2019, time.May, 1, 0, 0, 0, 0, jstZone)},
+		{Name: "平成", Start: time.Date(1989, time.January, 8, 0, 0, 0, 0, jstZone)},
+		{Name: "昭和", Start: time.Date(1926, time.December, 25, 0, 0, 0, 0, jstZone)},
+		{Name: "大正", Start: time.Date(1912, time.July, 30, 0, 0, 0, 0, jstZone)},
+		{Name: "明治", Start: time.Date(1868, time.October, 23, 0, 0, 0, 0, jstZone)},
+	}
+)
+
+func FormatJapaneseEraYear(targetTime *time.Time) (string, int, error) {
+	for _, era := range eraList {
+		if era.Start.Before(*targetTime) {
+			//初年度は１を返す
+			return era.Name, targetTime.Year() - era.Start.Year() + 1, nil
+		}
+	}
+	return "", 0, errors.New("明治より前の元号には対応していません")
+}
+
+//例：令和1年12月3日
+func FormatJapaneseEraYYYYMD(targetTime *time.Time) (string, error) {
+	for _, era := range eraList {
+		if era.Start.Before(*targetTime) {
+			//初年度は１を返す
+			return era.Name + strconv.Itoa(targetTime.Year()-era.Start.Year()+1) + "年" + targetTime.Format("1月2日"), nil
+		}
+	}
+	return "", errors.New("明治より前の元号には対応していません")
+}
 
 func GetLastDayOfMonth(targetTime time.Time, location *time.Location) time.Time {
 	firstOfMonth := time.Date(targetTime.Year(), targetTime.Month(), 1, 0, 0, 0, 0, location)
