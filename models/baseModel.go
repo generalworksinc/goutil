@@ -4,8 +4,6 @@ import (
 	"fmt"
 	gw_uuid "github.com/generalworksinc/goutil/uuid"
 	"github.com/google/uuid"
-	"log"
-	"strings"
 	"time"
 )
 
@@ -40,7 +38,7 @@ func (entity *BaseModelByManualIdLogicalDel) IsCreated() bool {
 	return entity.CreatedAt == time.Time{}
 }
 func (entity *BaseModelLogicalDel) BeforeInsert() {
-	log.Println("call beforeInsert!!", entity.Id == "", strings.TrimSpace(entity.Id) == "")
+	//log.Println("call beforeInsert!!", entity.Id == "", strings.TrimSpace(entity.Id) == "")
 	if entity.Id == "" {
 		uuid := uuid.New()
 		entity.Id = uuid.String()
