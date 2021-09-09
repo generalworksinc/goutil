@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -129,4 +130,24 @@ func ToSnakeCase(str string) string {
 	snake := matchFirstCap.ReplaceAllString(str, "${1}_${2}")
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
 	return strings.ToLower(snake)
+}
+
+//マルチバイトを考慮したSubstring
+func Substring(str string, start, length int) string {
+	if start < 0 {
+		panic("不正なindex指定です:" + strconv.Itoa(start))
+	}
+	if length <= 0 {
+		return ""
+	}
+	r := []rune(str)
+	if start+length > len(r) {
+		return string(r[start:])
+	} else {
+		return string(r[start : start+length])
+	}
+}
+func Substr(str string, start, end int) string {
+	r := []rune(str)
+	return string(r[start:end])
 }
