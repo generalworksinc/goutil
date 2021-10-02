@@ -17,6 +17,15 @@ func ContainsString(array []string, value string) bool {
 	}
 	return false
 }
+
+func IndexString(array []string, value string) int {
+	for ind, v := range array {
+		if value == v {
+			return ind
+		}
+	}
+	return -1
+}
 func UnionString(xs, ys []string) []string {
 	zs := make([]string, len(xs))
 	copy(zs, xs)
