@@ -94,6 +94,12 @@ type BaseModelByManualIdLogicalDelUlid struct {
 func (entity *BaseModelByManualIdLogicalDelUlid) IsCreated() bool {
 	return entity.CreatedAt == time.Time{}
 }
+
+type BaseModelByManualId struct {
+	CreatedAt time.Time `xorm:"created" json:"createdAt"`
+	UpdatedAt time.Time `xorm:"updated" json:"updatedAt"`
+}
+
 func (entity *BaseModelLogicalDelUlid) BeforeInsert() {
 	if entity.Id == "" {
 		entity.Id = gw_uuid.GetUlid()
