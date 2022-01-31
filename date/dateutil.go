@@ -101,3 +101,28 @@ func GetLastSecondOfDay(targetTime *time.Time, addDays int) *time.Time {
 	retDate := truncatedDate.Add(-time.Duration(1) * time.Second)
 	return &retDate
 }
+
+func MaxTime(a *time.Time, b *time.Time) *time.Time {
+	if a == nil {
+		return b
+	} else if b == nil {
+		return a
+	}
+	if a.After(*b) {
+		return a
+	} else {
+		return b
+	}
+}
+func MinTime(a *time.Time, b *time.Time) *time.Time {
+	if a == nil {
+		return b
+	} else if b == nil {
+		return a
+	}
+	if a.Before(*b) {
+		return a
+	} else {
+		return b
+	}
+}
