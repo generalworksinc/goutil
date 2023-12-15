@@ -36,6 +36,9 @@ func errorLog(err error, objList ...interface{}) {
 	sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
 }
 
+func New(errStr string) error {
+	return Info(errors.New(errStr))
+}
 func Info(err error, objList ...interface{}) error {
 	errorMessageList := []string{"err: " + err.Error()}
 	for ind, obj := range objList {
