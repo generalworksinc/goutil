@@ -3,11 +3,15 @@ package gw_errors
 import (
 	"errors"
 	"fmt"
-	"github.com/getsentry/sentry-go"
 	"log"
 	"strings"
+
+	"github.com/getsentry/sentry-go"
+
 	//"reflect"
 	"runtime"
+
+	pkg_errors "github.com/pkg/errors"
 )
 
 func errorLog(err error, objList ...interface{}) {
@@ -18,13 +22,36 @@ func errorLog(err error, objList ...interface{}) {
 		errorMessageList = append(errorMessageList, relationalStr)
 	}
 	//stacktrace
-	pc, fileName, line, _ := runtime.Caller(2)
-	stackTraceStr := fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
+	pc, fileName, line, ok := runtime.Caller(2)
+	stackTraceStr := ""
+	if ok {
+		stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
+	} else {
+		stackTraceStr = fmt.Sprintf("can't get line data \n")
+	}
 	errorMessageList = append(errorMessageList, "", stackTraceStr)
 
 	//logging & send to sentry server
 	log.Println(strings.Join(errorMessageList, "\n"))
 	sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+}
+
+func Info(err error, objList ...interface{}) error {
+	errorMessageList := []string{"err: " + err.Error()}
+	for ind, obj := range objList {
+		relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
+		errorMessageList = append(errorMessageList, relationalStr)
+	}
+	//stacktrace
+	pc, fileName, line, ok := runtime.Caller(1)
+	stackTraceStr := ""
+	if ok {
+		stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
+	} else {
+		stackTraceStr = fmt.Sprintf("can't get line data \n")
+	}
+	errorMessageList = append(errorMessageList, "", stackTraceStr)
+	return pkg_errors.Wrap(err, strings.Join(errorMessageList, "\n"))
 }
 
 func ReturnError(err error, objList ...interface{}) error {
