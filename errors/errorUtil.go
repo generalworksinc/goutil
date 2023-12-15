@@ -43,6 +43,9 @@ func Errorf(format string, a ...interface{}) error {
 	return Info(fmt.Errorf(format, a...))
 }
 func Info(err error, objList ...interface{}) error {
+	if err == nil {
+		return err
+	}
 	errorMessageList := []string{"err: " + err.Error()}
 	for ind, obj := range objList {
 		relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
