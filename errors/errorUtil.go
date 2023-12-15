@@ -39,6 +39,9 @@ func errorLog(err error, objList ...interface{}) {
 func New(errStr string) error {
 	return Info(errors.New(errStr))
 }
+func Errorf(format string, a ...interface{}) error {
+	return Info(fmt.Errorf(format, a...))
+}
 func Info(err error, objList ...interface{}) error {
 	errorMessageList := []string{"err: " + err.Error()}
 	for ind, obj := range objList {
