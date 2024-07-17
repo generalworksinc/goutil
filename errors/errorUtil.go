@@ -1,6 +1,7 @@
 package gw_errors
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -11,7 +12,7 @@ import (
 	//"reflect"
 	"runtime"
 
-	pkg_errors "github.com/pkg/errors"
+	"github.com/morikuni/failure/v2"
 )
 
 func errorLog(err error, objList ...interface{}) {
@@ -37,30 +38,52 @@ func errorLog(err error, objList ...interface{}) {
 }
 
 func New(errStr string) error {
-	return Info(errors.New(errStr))
+	return Wrap(errors.New(errStr))
 }
 func Errorf(format string, a ...interface{}) error {
-	return Info(fmt.Errorf(format, a...))
+	return Wrap(fmt.Errorf(format, a...))
 }
-func Info(err error, objList ...interface{}) error {
+func CallStackOf(err error) (stackTrace string, ok bool) {
+	stack := failure.CallStackOf(err)
+	if stack == nil || len(stack.Frames()) == 0 {
+		return "", false
+	} else {
+		out := &bytes.Buffer{}
+		for _, f := range stack.Frames() {
+			p := f.Path()
+			fmt.Fprintf(out, "%s:%d [%s.%s]\n", p, f.Line(), f.Pkg(), f.Func())
+		}
+		return out.String(), ok
+	}
+}
+func Wrap(err error, objList ...interface{}) error {
+	const KEY_WRAP_COUNT = "wrapCnt"
 	if err == nil {
 		return err
 	}
-	errorMessageList := []string{"err: " + err.Error()}
-	for ind, obj := range objList {
-		relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
-		errorMessageList = append(errorMessageList, relationalStr)
+	//errに、すでにwrapされた回数があれば、それを取得して、+1する
+	wrapCount, _ := failure.OriginValueAs[int, string](err, KEY_WRAP_COUNT)
+	wrapCount += 1
+	failureCtx := failure.Context{KEY_WRAP_COUNT: fmt.Sprintf("%v", wrapCount)}
+	objStrList := []string{}
+	for _, obj := range objList {
+		// relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
+		objStrList = append(objStrList, fmt.Sprintf("%v", obj))
 	}
+	if objStrList != nil && len(objStrList) > 0 {
+		failureCtx[fmt.Sprintf("param_%v", wrapCount)] = fmt.Sprintf("%v", objStrList)
+	}
+	return failure.Wrap(err, failureCtx)
 	//stacktrace
-	pc, fileName, line, ok := runtime.Caller(1)
-	stackTraceStr := ""
-	if ok {
-		stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
-	} else {
-		stackTraceStr = fmt.Sprintf("can't get line data \n")
-	}
-	errorMessageList = append(errorMessageList, "", stackTraceStr)
-	return pkg_errors.Wrap(err, strings.Join(errorMessageList, "\n"))
+	// pc, fileName, line, ok := runtime.Caller(1)
+	// stackTraceStr := ""
+	// if ok {
+	// 	stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
+	// } else {
+	// 	stackTraceStr = fmt.Sprintf("can't get line data \n")
+	// }
+	// errorMessageList = append(errorMessageList, "", stackTraceStr)
+	// return pkg_errors.Wrap(err, strings.Join(errorMessageList, "\n"))
 }
 
 func ReturnError(err error, objList ...interface{}) error {
