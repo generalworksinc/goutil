@@ -15,6 +15,17 @@ import (
 	"github.com/morikuni/failure/v2"
 )
 
+type ErrorCode string
+
+const (
+	GenericError        ErrorCode = "GenericError" //一般的なエラー。デフォルトでこれを指定
+	InternalServerError ErrorCode = "InternalServerError"
+	BadRequest          ErrorCode = "BadRequest"
+	NotFound            ErrorCode = "NotFound"
+	Forbidden           ErrorCode = "Forbidden"
+	UnknownError        ErrorCode = "UnknownError" // どれにも当てはまらないエラー
+)
+
 func errorLog(err error, objList ...interface{}) {
 	//error message, relational data
 	errorMessageList := []string{"err: " + err.Error()}
@@ -41,7 +52,7 @@ func errorLog(err error, objList ...interface{}) {
 }
 
 func New(errStr string) error {
-	return Wrap(errors.New(errStr))
+	return failure.New(GenericError, failure.Message(errStr))
 }
 func Errorf(format string, a ...interface{}) error {
 	return Wrap(fmt.Errorf(format, a...))
@@ -71,6 +82,7 @@ func Wrap(err error, objList ...interface{}) error {
 	if err == nil {
 		return err
 	}
+
 	//errに、すでにwrapされた回数があれば、それを取得して、+1する
 	wrapCount, _ := failure.OriginValueAs[int, string](err, KEY_WRAP_COUNT)
 	wrapCount += 1
@@ -83,7 +95,13 @@ func Wrap(err error, objList ...interface{}) error {
 	if objStrList != nil && len(objStrList) > 0 {
 		failureCtx[fmt.Sprintf("param_%v", wrapCount)] = fmt.Sprintf("%v", objStrList)
 	}
-	return failure.Wrap(err, failureCtx)
+
+	if wrapCount == 1 {
+		return failure.New(err, failureCtx)
+	} else {
+		return failure.Wrap(err, failureCtx)
+	}
+
 	//stacktrace
 	// pc, fileName, line, ok := runtime.Caller(1)
 	// stackTraceStr := ""
