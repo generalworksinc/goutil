@@ -119,7 +119,11 @@ func Wrap(err error, objList ...interface{}) error {
 		}
 		return failure.New(err, failureCtx)
 	} else {
-		return failure.Wrap(err, failureCtx)
+		if failureCtx != nil {
+			return failure.Wrap(err, failureCtx)
+		} else {
+			return failure.Wrap(err)
+		}
 	}
 
 	//stacktrace
