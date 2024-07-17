@@ -83,21 +83,29 @@ func Wrap(err error, objList ...interface{}) error {
 		return err
 	}
 
+	// originalStack := failure.CallStackOf(err)
+	// originalMessage := failure.MessageOf(err)
+	originalCode := failure.CodeOf(err)
+
 	//errに、すでにwrapされた回数があれば、それを取得して、+1する
-	wrapCount, _ := failure.OriginValueAs[int, string](err, KEY_WRAP_COUNT)
-	wrapCount += 1
-	failureCtx := failure.Context{KEY_WRAP_COUNT: fmt.Sprintf("%v", wrapCount)}
+	var failureCtx *failure.Context
 	objStrList := []string{}
 	for _, obj := range objList {
 		// relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
 		objStrList = append(objStrList, fmt.Sprintf("%v", obj))
 	}
 	if objStrList != nil && len(objStrList) > 0 {
-		failureCtx[fmt.Sprintf("param_%v", wrapCount)] = fmt.Sprintf("%v", objStrList)
+		failureCtx = &failure.Context{"params": fmt.Sprintf("%v", objStrList)}
 	}
 
-	if wrapCount == 1 {
-		err := failure.New(err, failureCtx)
+	if originalCode != nil {
+		var err error
+		if failureCtx != nil {
+			err = failure.New(err, failureCtx)
+		} else {
+			err = failure.New(err)
+		}
+
 		stack := failure.CallStackOf(err)
 		if stack != nil {
 			log.Println("stacktrace---------------------------------------------------------------------------:")
