@@ -1,6 +1,6 @@
 module github.com/generalworksinc/goutil
 
-go 1.20
+go 1.22
 
 require (
 	github.com/dsnet/compress v0.0.1

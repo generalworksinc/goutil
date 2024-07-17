@@ -142,12 +142,13 @@ func ReturnError(err error, objList ...interface{}) error {
 	if err != nil {
 		errorLog(err, objList)
 	}
-	return err
+	return Wrap(err, objList...)
 }
 func ReturnErrorStr(errStr string) error {
 	if errStr != "" {
-		err := errors.New(errStr)
+		err := New(errStr)
 		errorLog(err)
+		return err
 	}
 	return nil
 }
