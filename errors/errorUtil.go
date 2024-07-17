@@ -23,12 +23,15 @@ func errorLog(err error, objList ...interface{}) {
 		errorMessageList = append(errorMessageList, relationalStr)
 	}
 	//stacktrace
-	pc, fileName, line, ok := runtime.Caller(2)
-	stackTraceStr := ""
-	if ok {
-		stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
-	} else {
-		stackTraceStr = fmt.Sprintf("can't get line data \n")
+	stackTraceStr, ok := CallStackOf(err)
+	if !ok {
+		pc, fileName, line, ok := runtime.Caller(2)
+
+		if ok {
+			stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
+		} else {
+			stackTraceStr = fmt.Sprintf("can't get line data \n")
+		}
 	}
 	errorMessageList = append(errorMessageList, "", stackTraceStr)
 
@@ -43,17 +46,24 @@ func New(errStr string) error {
 func Errorf(format string, a ...interface{}) error {
 	return Wrap(fmt.Errorf(format, a...))
 }
-func CallStackOf(err error) (stackTrace string, ok bool) {
+func HasStack(err error) (failure.CallStack, bool) {
 	stack := failure.CallStackOf(err)
 	if stack == nil || len(stack.Frames()) == 0 {
-		return "", false
+		return nil, false
 	} else {
+		return stack, true
+	}
+}
+func CallStackOf(err error) (stackTrace string, ok bool) {
+	if stack, ok := HasStack(err); ok {
 		out := &bytes.Buffer{}
 		for _, f := range stack.Frames() {
 			p := f.Path()
 			fmt.Fprintf(out, "%s:%d [%s.%s]\n", p, f.Line(), f.Pkg(), f.Func())
 		}
 		return out.String(), ok
+	} else {
+		return "", false
 	}
 }
 func Wrap(err error, objList ...interface{}) error {
