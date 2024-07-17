@@ -109,6 +109,7 @@ func Wrap(err error, objList ...interface{}) error {
 			log.Println("stacktrace is not found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!.")
 
 		}
+		return failure.New(err, failureCtx)
 	} else {
 		return failure.Wrap(err, failureCtx)
 	}
