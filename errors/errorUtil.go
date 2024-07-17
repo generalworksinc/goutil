@@ -97,7 +97,18 @@ func Wrap(err error, objList ...interface{}) error {
 	}
 
 	if wrapCount == 1 {
-		return failure.New(err, failureCtx)
+		err := failure.New(err, failureCtx)
+		stack := failure.CallStackOf(err)
+		if stack != nil {
+			log.Println("stacktrace---------------------------------------------------------------------------:")
+			for _, f := range stack.Frames() {
+				p := f.Path()
+				log.Printf("%s:%d [%s.%s]\n", p, f.Line(), f.Pkg(), f.Func())
+			}
+		} else {
+			log.Println("stacktrace is not found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!.")
+
+		}
 	} else {
 		return failure.Wrap(err, failureCtx)
 	}
