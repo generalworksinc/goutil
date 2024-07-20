@@ -2,7 +2,6 @@ package gw_errors
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -155,19 +154,21 @@ func ReturnErrorStr(errStr string) error {
 
 func PanicError(err error, objList ...interface{}) {
 	if err != nil {
+		err = Wrap(err, objList...)
 		errorLog(err, objList)
 		panic(err)
 	}
 }
 func PanicErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
-		err := errors.New(errStr)
-		errorLog(err, objList)
+		err := New(errStr)
+		errorLog(err, objList...)
 		panic(err)
 	}
 }
 func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 	if err != nil {
+		err = Wrap(err, objList...)
 		errorLog(err, objList)
 		//c.Status(status)
 		f()
@@ -177,12 +178,13 @@ func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 
 func PrintError(err error, objList ...interface{}) {
 	if err != nil {
+		err = Wrap(err, objList...)
 		errorLog(err, objList)
 	}
 }
 func PrintErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
-		err := errors.New(errStr)
+		err := New(errStr)
 		errorLog(err, objList)
 	}
 }
