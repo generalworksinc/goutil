@@ -58,3 +58,14 @@ func RemoveStrInd(s []string, ind int) []string {
 	s = append(s[:ind], s[ind+1:]...)
 	return s
 }
+
+// Filter関数は、スライスとフィルタリング条件を受け取り、条件を満たす要素からなる新しいスライスを返します。
+func Filter[T any](slice []T, predicate func(T) bool) []T {
+	var result []T
+	for _, elem := range slice {
+		if predicate(elem) {
+			result = append(result, elem)
+		}
+	}
+	return result
+}
