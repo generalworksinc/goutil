@@ -7,3 +7,11 @@ func GetKeysFromMap[K comparable, V any](m map[K]V) []K {
 	}
 	return keys
 }
+
+func GetValuesFromMap[K comparable, V any](m map[K]V) []V {
+	values := make([]V, 0, len(m)) // スライスを初期化
+	for _, v := range m {
+		values = append(values, v) // 値をスライスに追加
+	}
+	return values
+}
