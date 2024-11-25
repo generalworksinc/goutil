@@ -2,6 +2,7 @@ package gw_encode
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	"golang.org/x/text/transform"
 )
 
-//Conversion
+// Conversion
 func Conversion(inStream io.Reader, outStream io.Writer) error {
 	//reader from stream (Shift-JIS to UTF-8)
 	reader := transform.NewReader(inStream, japanese.ShiftJIS.NewDecoder())
@@ -90,4 +91,13 @@ func EucjpByteToUtf8Byte(str []byte) ([]byte, error) {
 		return []byte{}, err
 	}
 	return ret, err
+}
+
+func GenerateAESKey() ([]byte, error) {
+	key := make([]byte, 32) // AES-256のために32バイトのキーを作成
+	_, err := rand.Read(key)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
