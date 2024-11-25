@@ -32,7 +32,7 @@ func FormatJapaneseEraYear(targetTime *time.Time) (string, int, error) {
 	return "", 0, errors.New("明治より前の元号には対応していません")
 }
 
-//例：令和1年12月3日
+// 例：令和1年12月3日
 func FormatJapaneseEraYYYYMD(targetTime *time.Time) (string, error) {
 	for _, era := range eraList {
 		if era.Start.Before(*targetTime) {
@@ -65,7 +65,7 @@ func GetFirstDayOfNextMonth(targetTime time.Time, location *time.Location) time.
 	return firstOfNextMonth
 }
 
-//当月末を取得
+// 当月末を取得
 func TruncDateAndGetLastSecondOfMonth(targetTime time.Time) (time.Time, time.Time) {
 	jst, _ := time.LoadLocation("Asia/Tokyo")
 	truncatedDate := targetTime.In(jst)
@@ -75,7 +75,7 @@ func TruncDateAndGetLastSecondOfMonth(targetTime time.Time) (time.Time, time.Tim
 	return truncatedDate, toDate
 }
 
-//月末の更新日（月末日 AM 9:00）を考慮して、最終日当日(AM0:00 以降)の場合は、翌月末を更新日に設定する
+// 月末の更新日（月末日 AM 9:00）を考慮して、最終日当日(AM0:00 以降)の場合は、翌月末を更新日に設定する
 // return truncateDate, toDate, trialEndDate
 func TruncDateAndGetTrialEndAndToDate(targetTime time.Time) (time.Time, time.Time, *time.Time) {
 	truncatedDate, toDate := TruncDateAndGetLastSecondOfMonth(targetTime)
@@ -91,7 +91,7 @@ func TruncDateAndGetTrialEndAndToDate(targetTime time.Time) (time.Time, time.Tim
 	}
 }
 
-//X日後の日本時間ラスト秒を取得
+// X日後の日本時間ラスト秒を取得
 func GetLastSecondOfDay(targetTime *time.Time, addDays int) *time.Time {
 	jst, _ := time.LoadLocation("Asia/Tokyo")
 	truncatedDate := targetTime.In(jst)
@@ -125,4 +125,9 @@ func MinTime(a *time.Time, b *time.Time) *time.Time {
 	} else {
 		return b
 	}
+}
+
+func GetYoubi(t time.Time) string {
+	wdays := [...]string{"日", "月", "火", "水", "木", "金", "土"}
+	return wdays[t.Weekday()]
 }
