@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+
+	gw_errors "github.com/generalworksinc/goutil/errors"
 )
 
 func Encrypt(key, text []byte) (string, error) {
@@ -57,4 +59,42 @@ func decodeBase64(s string) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func EncryptAESGCM(key, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, gw_errors.Wrap(err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, gw_errors.Wrap(err)
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, gw_errors.Wrap(err)
+	}
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return ciphertext, nil
+}
+
+func DecryptAESGCM(key, ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, gw_errors.Wrap(err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, gw_errors.Wrap(err)
+	}
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, gw_errors.New("ciphertext too short")
+	}
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, gw_errors.Wrap(err)
+	}
+	return plaintext, nil
 }
