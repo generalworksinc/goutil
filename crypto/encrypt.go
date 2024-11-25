@@ -98,3 +98,12 @@ func DecryptAESGCM(key, ciphertext []byte) ([]byte, error) {
 	}
 	return plaintext, nil
 }
+
+func GenerateAESKey() ([]byte, error) {
+	key := make([]byte, 32) // AES-256のために32バイトのキーを作成
+	_, err := rand.Read(key)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
+}

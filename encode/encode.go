@@ -2,7 +2,6 @@ package gw_encode
 
 import (
 	"bytes"
-	"crypto/rand"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -91,13 +90,4 @@ func EucjpByteToUtf8Byte(str []byte) ([]byte, error) {
 		return []byte{}, err
 	}
 	return ret, err
-}
-
-func GenerateAESKey() ([]byte, error) {
-	key := make([]byte, 32) // AES-256のために32バイトのキーを作成
-	_, err := rand.Read(key)
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
 }
