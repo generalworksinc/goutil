@@ -5,8 +5,9 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"io"
+
+	gw_errors "github.com/generalworksinc/goutil/errors"
 )
 
 func Encrypt(key, text []byte) (string, error) {
@@ -35,7 +36,7 @@ func Decrypt(key []byte, t string) ([]byte, error) {
 		return nil, err
 	}
 	if len(text) < aes.BlockSize {
-		return nil, errors.New("too short")
+		return nil, gw_errors.New("too short")
 	}
 	iv := text[:aes.BlockSize]
 	text = text[aes.BlockSize:]

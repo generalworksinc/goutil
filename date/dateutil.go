@@ -1,7 +1,6 @@
 package gw_date
 
 import (
-	"errors"
 	"strconv"
 	"time"
 )
@@ -29,7 +28,7 @@ func FormatJapaneseEraYear(targetTime *time.Time) (string, int, error) {
 			return era.Name, targetTime.Year() - era.Start.Year() + 1, nil
 		}
 	}
-	return "", 0, errors.New("明治より前の元号には対応していません")
+	return "", 0, gw_errors.New("明治より前の元号には対応していません")
 }
 
 // 例：令和1年12月3日
@@ -40,7 +39,7 @@ func FormatJapaneseEraYYYYMD(targetTime *time.Time) (string, error) {
 			return era.Name + strconv.Itoa(targetTime.Year()-era.Start.Year()+1) + "年" + targetTime.Format("1月2日"), nil
 		}
 	}
-	return "", errors.New("明治より前の元号には対応していません")
+	return "", gw_errors.New("明治より前の元号には対応していません")
 }
 
 func GetLastDayOfMonth(targetTime time.Time, location *time.Location) time.Time {

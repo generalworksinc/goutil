@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/argon2"
 	"strings"
+
+	gw_errors "github.com/generalworksinc/goutil/errors"
+	"golang.org/x/crypto/argon2"
 )
 
 type params struct {
@@ -87,7 +89,7 @@ func ComparePasswordAndHash(password, salteBefore string, encodedHash string) (m
 func DecodeHash(encodedHash string) (p *params, salt, hash []byte, err error) {
 	vals := strings.Split(encodedHash, "$")
 	if len(vals) != 6 {
-		return nil, nil, nil, ErrInvalidHash
+		return nil, nil, nil, gw_errors.Wrap(ErrInvalidHash)
 	}
 
 	var version int
@@ -96,7 +98,7 @@ func DecodeHash(encodedHash string) (p *params, salt, hash []byte, err error) {
 		return nil, nil, nil, err
 	}
 	if version != argon2.Version {
-		return nil, nil, nil, ErrIncompatibleVersion
+		return nil, nil, nil, gw_errors.Wrap(ErrIncompatibleVersion)
 	}
 
 	p = &params{}
