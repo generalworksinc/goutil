@@ -13,13 +13,13 @@ import (
 func Encrypt(key, text []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	b := base64.StdEncoding.EncodeToString(text)
 	cipt := make([]byte, aes.BlockSize+len(b))
 	iv := cipt[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	cfb := cipher.NewCFBEncrypter(block, iv)
 	cfb.XORKeyStream(cipt[aes.BlockSize:], []byte(b))
@@ -29,11 +29,11 @@ func Encrypt(key, text []byte) (string, error) {
 func Decrypt(key []byte, t string) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 	text, err := decodeBase64(t)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 	if len(text) < aes.BlockSize {
 		return nil, gw_errors.New("too short")
@@ -44,7 +44,7 @@ func Decrypt(key []byte, t string) ([]byte, error) {
 	cfb.XORKeyStream(text, text)
 	data, err := base64.StdEncoding.DecodeString(string(text))
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 	return data, nil
 }
@@ -55,7 +55,7 @@ func encodeBase64(b []byte) string {
 func decodeBase64(s string) ([]byte, error) {
 	data, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 	return data, nil
 }
@@ -102,7 +102,7 @@ func GenerateAESKey() ([]byte, error) {
 	key := make([]byte, 32) // AES-256のために32バイトのキーを作成
 	_, err := rand.Read(key)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 	return key, nil
 }
