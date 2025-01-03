@@ -10,7 +10,7 @@ import (
 	"golang.org/x/text/transform"
 )
 
-//Conversion
+// Conversion
 func Conversion(inStream io.Reader, outStream io.Writer) error {
 	//reader from stream (Shift-JIS to UTF-8)
 	reader := transform.NewReader(inStream, japanese.ShiftJIS.NewDecoder())
