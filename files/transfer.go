@@ -13,7 +13,8 @@ import (
 )
 
 // 指定したURLからファイルをダウンロードする関数
-func DownloadFile(urlStr string, fileName *string) error {
+// downloadPath: default current directory
+func DownloadFile(urlStr string, downloadPath *string, fileName *string) error {
 	// HTTP GETリクエストを送信します
 	resp, err := http.Get(urlStr)
 	if err != nil {
@@ -37,6 +38,10 @@ func DownloadFile(urlStr string, fileName *string) error {
 		fileName = gw_common.Pointer(path.Base(parsedUrl.Path))
 	} else {
 		f = *fileName
+	}
+	if downloadPath == nil {
+	} else {
+		f = path.Join(*downloadPath, f)
 	}
 	out, err := os.Create(f)
 	if err != nil {
