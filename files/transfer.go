@@ -24,7 +24,7 @@ func DownloadFile(urlStr string, downloadPath *string, fileName *string) (string
 
 	// レスポンスが成功したことを確認します
 	if resp.StatusCode != http.StatusOK {
-		return "" < gw_errors.New(fmt.Sprintf("サーバーからエラー応答がありました: %v", resp.Status))
+		return "", gw_errors.New(fmt.Sprintf("サーバーからエラー応答がありました: %v", resp.Status))
 	}
 
 	// ファイルを作成します
