@@ -3,12 +3,12 @@ package gw_files
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 
-	gw_common "github.com/generalworksinc/goutil/common"
 	gw_errors "github.com/generalworksinc/goutil/errors"
 )
 
@@ -35,14 +35,14 @@ func DownloadFile(urlStr string, downloadPath *string, fileName *string) (string
 			return "", gw_errors.Wrap(err)
 		}
 		// パス部分を取得し、ファイル名を抽出
-		fileName = gw_common.Pointer(path.Base(parsedUrl.Path))
+		f = path.Base(parsedUrl.Path)
 	} else {
 		f = *fileName
 	}
-	if downloadPath == nil {
-	} else {
+	if downloadPath != nil {
 		f = path.Join(*downloadPath, f)
 	}
+	log.Println("download file path:", f)
 	out, err := os.Create(f)
 	if err != nil {
 		return "", gw_errors.Wrap(err)

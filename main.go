@@ -1,54 +1,17 @@
 package main
 
 import (
-	gw_uuid "github.com/generalworksinc/goutil/uuid"
-	"github.com/oklog/ulid/v2"
 	"log"
-	"math/rand"
-	"sort"
-	"time"
+
+	gw_files "github.com/generalworksinc/goutil/files"
 )
 
 func main() {
-	ids1 := []string{}
-	ids2 := []string{}
-	for i := 1; i < 10000; i++ {
-		sleepTime := int64(time.Millisecond) * int64(rand.Intn(20)+1)
-		time.Sleep(time.Duration(sleepTime))
-		println(i)
-		id := gw_uuid.GetUlid()
-		ids1 = append(ids1, id)
-		ids2 = append(ids2, id)
+	url := `https://smaregi-pos-public.s3.ap-northeast-1.amazonaws.com/transactionDetail/2025/01/04/jv1n791ktuo.csv.gz?AWSAccessKeyId=ASIA5EBGOX5IX4GX3HLT&Expires=1735996639&Signature=JqzLDq1xzk62yJujID%2BxpBAtgC4%3D&X-Amzn-Trace-Id=Root%3D1-677926cd-4a3fa527f668a6dcddb5cec5%3BParent%3D0a5bd715e3b327d1%3BSampled%3D0%3BLineage%3D1%3A45be6e0c%3A0&x-amz-security-token=IQoJb3JpZ2luX2VjECwaDmFwLW5vcnRoZWFzdC0xIkgwRgIhAJNyEZXVnqjkjuOCYBpSJe2zoYd%2FWTQEoYdErXGcYLwhAiEArtbLqUC6vlA8A7p8y%2F7EOnVox8QmOzwuYZhVr13s1Rcq1AMIFRAAGgw5MDIwMjM3OTA0MTciDPhFSZ6SY6ofTUdrWSqxA%2B23YJSL9R2%2BLPIZCkx0EPF6nCIAY6qfYeUfF7VFliLV%2B%2FqF%2ByLdjZJNtqMnpUoYmV5wtyaEx9d15UqAGwUGuPtxVZ8IgbPWKZL8G30uYyfX0t9MztvJHY3hGXThZ1xedmVG1MHSp9RaMnM6cvL39Nnqf88NgLsrUdxVadBQvz5ih%2B%2Bsl7tZFZ%2Bx0N0xie%2FifYI6xRrzlzkYR1BrzOQHWjt07AR4vB5Ar7tYyOIezaZyFzjuHlSLhWx1bgIq%2B9%2FXsWCe0lqVSUefj36aMR91AKUwPZq5mgJkX2nLEEI4wYFNNHgDLTbNWf6MV3BOauaK2QHX%2BbhUquD%2BVFeFGEJrBoxu5Y8ncPrRNs791D%2BfYYk28GOuDsxDAk7LGWvOEQFwNK9T81YwX1pkKadnq9Mh%2B1YT1rgCGOoDgN%2FVxww57Y8LUQMeSGEUFfxyLbGrShtKAvKPwHZzvnsXnu3IH9TtiDaBKse5sNx65xUpHHXW9r8qjge%2BD9H1wUwj%2B0aC37KgBQjDmfQOvBF6U%2B1624ClegrRmm%2B4WA%2BEj5snVNrk7xvqUXeM3frO93hQV2sqmb7M2agwzc3kuwY6nQHUM7CMxoeIQBcvFMrIV%2BHz64nI%2FLRxti58TRGvfYRzXvMVF8MrlDWMlNEGjFg%2BUFDTCBGs4Zd1M8KMIarGMMA6Oqd0UfubonAoEhwxVtpuTonEx77JyL4ap4A51n9Nljamu4d%2F1VsolKDj24q94OAdVSKvEsnEOQdfMzc%2FnwFxDyQmdC9K2CknMeZ6%2BOoH0KGiU7u47x4gfx6H2JE2`
+	path, err := gw_files.DownloadFile(url, nil, nil)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	sort.Strings(ids1)
-	var id1Ulid ulid.ULID
-	var id2Ulid ulid.ULID
-	var err error
-	for ind, id1 := range ids1 {
-		id2 := ids2[ind]
-
-		//id1UlidBefore := id1Ulid.String()
-		id1Ulid, err = ulid.Parse(id1)
-		if err != nil {
-			log.Fatal("parse error 1.", id1)
-		}
-		id2UlidBefore := id2Ulid.String()
-		id2Ulid, err = ulid.Parse(id2)
-		if err != nil {
-			log.Fatal("parse error 2.", id2)
-		}
-
-		if id1 != id2 {
-			log.Fatal("ind, id1, id2, id1Time, id2Time", ind, id1, id2, ulid.Time(id1Ulid.Time()), ulid.Time(id2Ulid.Time()))
-		}
-		if id2UlidBefore > id2Ulid.String() {
-			log.Fatal("before is Bigger!!!", ulid.Time(ulid.MustParse(id2UlidBefore).Time()), ulid.Time(id2Ulid.Time()))
-		}
-		if ids2[0] > id2Ulid.String() {
-			log.Fatal("before is Bigger!!!", ulid.Time(ulid.MustParse(id2UlidBefore).Time()), ulid.Time(id2Ulid.Time()))
-		}
-		println(id1)
-	}
+	log.Println("path:", path)
 	println("done! ok")
 }

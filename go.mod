@@ -13,9 +13,6 @@ require (
 	golang.org/x/text v0.21.0
 )
 
-require (
-	github.com/pkg/errors v0.9.1 // indirect
-	golang.org/x/sys v0.28.0
-)
+require golang.org/x/sys v0.28.0 // indirect
 
 replace github.com/generalworksinc/goutil => ./
