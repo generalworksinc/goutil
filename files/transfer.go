@@ -14,17 +14,17 @@ import (
 
 // 指定したURLからファイルをダウンロードする関数
 // downloadPath: default current directory
-func DownloadFile(urlStr string, downloadPath *string, fileName *string) error {
+func DownloadFile(urlStr string, downloadPath *string, fileName *string) (string, error) {
 	// HTTP GETリクエストを送信します
 	resp, err := http.Get(urlStr)
 	if err != nil {
-		return err
+		return "", gw_errors.Wrap(err)
 	}
 	defer resp.Body.Close()
 
 	// レスポンスが成功したことを確認します
 	if resp.StatusCode != http.StatusOK {
-		return gw_errors.New(fmt.Sprintf("サーバーからエラー応答がありました: %v", resp.Status))
+		return "" < gw_errors.New(fmt.Sprintf("サーバーからエラー応答がありました: %v", resp.Status))
 	}
 
 	// ファイルを作成します
@@ -32,7 +32,7 @@ func DownloadFile(urlStr string, downloadPath *string, fileName *string) error {
 	if fileName == nil {
 		parsedUrl, err := url.Parse(urlStr)
 		if err != nil {
-			return gw_errors.Wrap(err)
+			return "", gw_errors.Wrap(err)
 		}
 		// パス部分を取得し、ファイル名を抽出
 		fileName = gw_common.Pointer(path.Base(parsedUrl.Path))
@@ -45,11 +45,11 @@ func DownloadFile(urlStr string, downloadPath *string, fileName *string) error {
 	}
 	out, err := os.Create(f)
 	if err != nil {
-		return err
+		return "", gw_errors.Wrap(err)
 	}
 	defer out.Close()
 
 	// レスポンスの内容をファイルに書き込みます
 	_, err = io.Copy(out, resp.Body)
-	return gw_errors.Wrap(err)
+	return f, gw_errors.Wrap(err)
 }
