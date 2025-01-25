@@ -8,7 +8,22 @@ func ContainsUint(array []uint, value uint) bool {
 	}
 	return false
 }
+func GetKeys(m map[string]interface{}) []string {
+	ks := []string{}
+	for k, _ := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}
 
+func RemoveDuplicateStrList(array []string) []string {
+	// 順番は保持されません
+	retMap := map[string]interface{}{}
+	for _, v := range array {
+		retMap[v] = struct{}{}
+	}
+	return GetKeys(retMap)
+}
 func ContainsString(array []string, value string) bool {
 	for _, v := range array {
 		if value == v {
