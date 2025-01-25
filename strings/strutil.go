@@ -14,6 +14,25 @@ import (
 	"time"
 )
 
+func CNullStrByJson(json map[string]interface{}, key string) string {
+	data := json[key]
+	if data == nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(data.(string), "\n", " "), "　", " "))
+}
+func CNullStrList(json map[string]interface{}, key string) []string {
+	data := json[key]
+	if data == nil {
+		return []string{}
+	}
+	interfaceList := data.([]interface{})
+	dataList := []string{}
+	for _, i := range interfaceList {
+		dataList = append(dataList, i.(string))
+	}
+	return dataList
+}
 func CNullStr(a *string) string {
 	if a == nil {
 		return ""
@@ -132,7 +151,7 @@ func ToSnakeCase(str string) string {
 	return strings.ToLower(snake)
 }
 
-//マルチバイトを考慮したSubstring
+// マルチバイトを考慮したSubstring
 func Substring(str string, start, length int) string {
 	if start < 0 {
 		panic("不正なindex指定です:" + strconv.Itoa(start))
