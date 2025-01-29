@@ -9,6 +9,25 @@ type DoubleKey[T1 comparable, T2 comparable] struct {
 
 type DoubleKeyMap[T1 comparable, T2 comparable, T3 any] map[DoubleKey[T1, T2]]T3
 
+func (m DoubleKeyMap[T1, T2, T3]) Contains(key1 T1, key2 T2) bool {
+	_, exists := m[DoubleKey[T1, T2]{Key1: key1, Key2: key2}]
+	return exists
+}
+func (m DoubleKeyMap[T1, T2, T3]) Get(key1 T1, key2 T2) T3 {
+	return m[DoubleKey[T1, T2]{Key1: key1, Key2: key2}]
+}
+func (m DoubleKeyMap[T1, T2, T3]) Set(key1 T1, key2 T2, value T3) {
+	m[DoubleKey[T1, T2]{Key1: key1, Key2: key2}] = value
+}
+
+func (m DoubleKeyMap[T1, T2, T3]) Delete(key1 T1, key2 T2) {
+	delete(m, DoubleKey[T1, T2]{Key1: key1, Key2: key2})
+}
+
+func (m DoubleKeyMap[T1, T2, T3]) Keys() []DoubleKey[T1, T2] {
+	return GetKeysFromMap(m)
+}
+
 type jSONDoubleKeyMap[T1 comparable, T2 comparable, T3 any] map[T1]map[T2]T3
 
 func (dkm *DoubleKeyMap[T1, T2, T3]) UnmarshalJSON(b []byte) error {
