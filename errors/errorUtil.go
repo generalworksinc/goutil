@@ -91,7 +91,11 @@ func Wrap(err error, objList ...interface{}) error {
 	objStrList := []string{}
 	for _, obj := range objList {
 		// relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
-		objStrList = append(objStrList, fmt.Sprintf("%v", obj))
+		objStr := "nil"
+		if obj != nil {
+			objStr = fmt.Sprintf("%v", obj)
+		}
+		objStrList = append(objStrList, objStr)
 	}
 	if objStrList != nil && len(objStrList) > 0 {
 		failureCtx = &failure.Context{"params": fmt.Sprintf("%v", objStrList)}
