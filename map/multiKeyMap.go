@@ -73,10 +73,19 @@ func (dkm *DoubleKeyMap[T1, T2, T3]) UnmarshalJSONInterface(ifce interface{}) er
 		if !ok {
 			return gw_errors.New("object is Not DoubleKeyMap type. first key is " + fmt.Sprintf("%+v", k1))
 		}
-		for k2, v2 := range v1Ifce {
+		for k2, vIfce := range v1Ifce {
 			log.Println("k2", k2)
-			log.Println("v2", v2)
-			dkm.Set(k1, k2, v2.(T3))
+			log.Println("vIfce", vIfce)
+			byteData, err := json.Marshal(vIfce)
+			if err != nil {
+				return gw_errors.Wrap(err)
+			}
+			var v2 T3
+			err = json.Unmarshal(byteData, &v2)
+			if err != nil {
+				return gw_errors.Wrap(err)
+			}
+			dkm.Set(k1, k2, v2)
 		}
 		log.Println("end. OK!--------------------")
 	}
