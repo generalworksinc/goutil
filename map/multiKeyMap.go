@@ -16,6 +16,15 @@ func (m DoubleKeyMap[T1, T2, T3]) Contains(key1 T1, key2 T2) bool {
 func (m DoubleKeyMap[T1, T2, T3]) Get(key1 T1, key2 T2) T3 {
 	return m[DoubleKey[T1, T2]{Key1: key1, Key2: key2}]
 }
+func (m DoubleKeyMap[T1, T2, T3]) GetMapByFirstKey(key1 T1) map[T2]T3 {
+	result := make(map[T2]T3)
+	for k, v := range m {
+		if k.Key1 == key1 {
+			result[k.Key2] = v
+		}
+	}
+	return result
+}
 func (m DoubleKeyMap[T1, T2, T3]) Set(key1 T1, key2 T2, value T3) {
 	m[DoubleKey[T1, T2]{Key1: key1, Key2: key2}] = value
 }
