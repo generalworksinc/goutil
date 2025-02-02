@@ -3,6 +3,7 @@ package gw_map
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	gw_errors "github.com/generalworksinc/goutil/errors"
 )
@@ -64,13 +65,20 @@ func (dkm *DoubleKeyMap[T1, T2, T3]) UnmarshalJSONInterface(ifce interface{}) er
 		return gw_errors.New("object is Not DoubleKeyMap type.")
 	}
 	for k1, second := range secondMap {
+		log.Println("--------------------")
+		log.Println("k1", k1)
+		log.Println("second", second)
 		v1Ifce, ok := second.(map[T2]T3)
+		log.Println("v1Ifce", v1Ifce)
 		if !ok {
 			return gw_errors.New("object is Not DoubleKeyMap type. first key is " + fmt.Sprintf("%v", k1))
 		}
 		for k2, v2 := range v1Ifce {
+			log.Println("k2", k2)
+			log.Println("v2", v2)
 			dkm.Set(k1, k2, v2)
 		}
+		log.Println("end. OK!--------------------")
 	}
 	return nil
 }
