@@ -1,6 +1,11 @@
 package gw_map
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+
+	gw_errors "github.com/generalworksinc/goutil/errors"
+)
 
 type DoubleKey[T1 comparable, T2 comparable] struct {
 	Key1 T1
@@ -49,6 +54,22 @@ func (dkm *DoubleKeyMap[T1, T2, T3]) UnmarshalJSON(b []byte) error {
 	for k1, v1 := range jsonMap {
 		for k2, v2 := range v1 {
 			(*dkm)[MakeKey2(k1, k2)] = v2
+		}
+	}
+	return nil
+}
+func (dkm *DoubleKeyMap[T1, T2, T3]) UnmarshalJSONInterface(ifce interface{}) error {
+	secondMap, ok := ifce.(map[T1]interface{})
+	if !ok {
+		return gw_errors.New("object is Not DoubleKeyMap type.")
+	}
+	for k1, second := range secondMap {
+		v1Ifce, ok := second.(map[T2]T3)
+		if !ok {
+			return gw_errors.New("object is Not DoubleKeyMap type. first key is " + fmt.Sprintf("%v", k1))
+		}
+		for k2, v2 := range v1Ifce {
+			dkm.Set(k1, k2, v2)
 		}
 	}
 	return nil
