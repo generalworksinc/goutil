@@ -16,7 +16,7 @@ func Clone[T any](value *T) *T {
 	return &clone
 }
 
-func CloneSlice[T any](value []*T) []*T {
+func CloneSliceP[T any](value []*T) []*T {
 	if value == nil {
 		return nil
 	}
@@ -26,8 +26,17 @@ func CloneSlice[T any](value []*T) []*T {
 	}
 	return clonedSlice
 }
+func CloneSlice[T any](value []T) []T {
+	if value == nil {
+		return nil
+	}
+	clonedSlice := make([]T, len(value))
+	copy(clonedSlice, value)
+	return clonedSlice
 
-func CloneMap[K comparable, V any](value map[K]*V) map[K]*V {
+}
+
+func CloneMapP[K comparable, V any](value map[K]*V) map[K]*V {
 	if value == nil {
 		return nil
 	}
@@ -35,6 +44,17 @@ func CloneMap[K comparable, V any](value map[K]*V) map[K]*V {
 	for k, v := range value {
 		clonedMap[k] = Clone(v)
 
+	}
+	return clonedMap
+}
+
+func CloneMap[K comparable, V any](value map[K]V) map[K]V {
+	if value == nil {
+		return nil
+	}
+	clonedMap := make(map[K]V, len(value))
+	for k, v := range value {
+		clonedMap[k] = v
 	}
 	return clonedMap
 }
