@@ -1,4 +1,4 @@
-package gw_japaneseaddress
+package gw_japanese_address
 
 import (
 	"regexp"
