@@ -13,6 +13,10 @@ require (
 	golang.org/x/text v0.21.0
 )
 
-require golang.org/x/sys v0.28.0 // indirect
+require (
+	github.com/ktnyt/go-moji v1.0.0 // indirect
+	github.com/kurehajime/cjk2num v0.0.0-20210929142953-005d508333d0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+)
 
 replace github.com/generalworksinc/goutil => ./
