@@ -10,7 +10,10 @@ import (
 )
 
 var kansujiChars = []string{"京", "兆", "億", "万", "萬", "만", "千", "仟", "천", "百", "佰", "백", "十", "拾", "십", "廿", "念", "입", "卅", "삽", "卌", "십", "〇", "一", "二", "三", "四", "五", "六", "七", "八", "九", "零", "壱", "弐", "参", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "영", "령", "일", "이", "삼", "사", "오", "육", "륙", "칠", "팔", "구"}
-var kansujiRe = regexp.MustCompile(`([` + strings.Join(kansujiChars, "") + `]+)`)
+
+// var kansujiRe = regexp.MustCompile(`([` + strings.Join(kansujiChars, "") + `]+)`)
+var kansujiRe = regexp.MustCompile(`([` + strings.Join(kansujiChars, "") + `]+)(丁目|番地?|号)`)
+
 var NormalizeAddressBanchiRe = regexp.MustCompile(`(\d+)(番地?|丁目)(\d)`)
 
 // 数値と数値の間のスペース
@@ -34,16 +37,27 @@ func NormalizeAddress(address string) string {
 	//漢数字のみを抽出し、sliceに分割する
 	// 住所文字列を漢数字とそれ以外で分割し、漢数字部分のみを変換
 	parts := kansujiRe.Split(address, -1)
-	matches := kansujiRe.FindAllString(address, -1)
+	// matches := kansujiRe.FindAllString(address, -1)
+	matches := kansujiRe.FindAllStringSubmatch(address, -1)
 
 	var result string
 	for i, part := range parts {
 		result += part
 		if i < len(matches) {
-			if num, err := cjk2num.Convert(matches[i]); err == nil {
-				result += strconv.FormatInt(num, 10)
+			//号以前の漢数字部分のみを変換するように修正
+			// if num, err := cjk2num.Convert(matches[i]); err == nil {
+			// 	result += strconv.FormatInt(num, 10)
+			// } else {
+			// 	result += matches[i]
+			// }
+			kanjiNum := matches[i][1]
+			suffix := matches[i][2]
+
+			// Convert only the kanji number portion
+			if num, err := cjk2num.Convert(kanjiNum); err == nil {
+				result += strconv.FormatInt(num, 10) + suffix
 			} else {
-				result += matches[i]
+				result += matches[i][0]
 			}
 		}
 	}
