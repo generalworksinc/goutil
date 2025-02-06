@@ -13,6 +13,9 @@ var kansujiChars = []string{"京", "兆", "億", "万", "萬", "만", "千", "�
 var kansujiRe = regexp.MustCompile(`([` + strings.Join(kansujiChars, "") + `]+)`)
 var NormalizeAddressBanchiRe = regexp.MustCompile(`(\d+)(番地?|丁目)(\d)`)
 
+// 数値と数値の間のスペース
+var SpaceBetweenNumberRe = regexp.MustCompile(`(\d+)\s(\d+)`)
+
 func NormalizeAddress(address string) string {
 	// 不要な文字を削除/置換
 	address = strings.ReplaceAll(address, "ー", "-") // 全角ハイフンを半角に
@@ -24,6 +27,8 @@ func NormalizeAddress(address string) string {
 	address = moji.Convert(address, moji.HG, moji.KK)
 	// Convert Zenkaku Eisuu to Hankaku Eisuu
 	address = moji.Convert(address, moji.ZE, moji.HE)
+	// Convert Zenkaku Space to Hankaku Space
+	address = moji.Convert(address, moji.ZS, moji.HS)
 
 	// 漢数字部分を、数字に変換
 	//漢数字のみを抽出し、sliceに分割する
@@ -57,7 +62,8 @@ func NormalizeAddress(address string) string {
 	// address = strings.ReplaceAll(address, "番地", "-")
 	// address = strings.ReplaceAll(address, "丁目", "-")
 
-	address = strings.ReplaceAll(address, "　", "") // 全角スペース削除
+	//数値と数値の間のスペースは、文字,として残す
+	address = SpaceBetweenNumberRe.ReplaceAllString(address, "$1,$2")
 	address = strings.ReplaceAll(address, " ", "") // 半角スペース削除
 	return address
 }
