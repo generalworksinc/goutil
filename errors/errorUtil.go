@@ -112,18 +112,19 @@ func CallStackOf(err error) (stackTrace string, ok bool) {
 	}
 }
 func UnwrapToOriginalError(err error) error {
-	tailError := err
-	var fl failure.Failure
+	beforeTailError := err
+	returnedError := err
 	for {
-		fl, tailError = failure.UnwrapFailure(tailError)
-		if fl == nil {
-			if tailError == nil {
-				tailError = err
+		_, tailError := failure.UnwrapFailure(beforeTailError)
+		if tailError == nil {
+			if beforeTailError != nil {
+				returnedError = beforeTailError
 			}
 			break
 		}
+		beforeTailError = tailError
 	}
-	return tailError
+	return returnedError
 }
 func Wrap(err error, objList ...interface{}) error {
 	if err == nil {
