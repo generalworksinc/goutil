@@ -154,7 +154,7 @@ func Wrap(err error, objList ...interface{}) error {
 	return newError
 }
 
-func CatchPanic(errPt *error) {
+func CatchPanic(errPt *error, sendLogger bool) {
 	var err error
 	if r := recover(); r != nil {
 		var ok bool
@@ -174,10 +174,11 @@ func CatchPanic(errPt *error) {
 			}
 		}
 		log.Println("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
-		//panicタイミングではsentryに送信しない
-		// if !gw_errors.CheckSentToLogger(err) {
-		// 	sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
-		// }
+		if sendLogger && !CheckSentToLogger(err) {
+			//sentryに送信
+			sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
+			err = LoggerSentFlagOn(err)
+		}
 		*errPt = err
 	}
 }
