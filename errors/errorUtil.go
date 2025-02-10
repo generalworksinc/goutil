@@ -23,13 +23,41 @@ const (
 	NotFound            ErrorCode = "NotFound"
 	Forbidden           ErrorCode = "Forbidden"
 	UnknownError        ErrorCode = "UnknownError" // どれにも当てはまらないエラー
+
+	FAILER_CODE_FLG_SENT_TO_LOGGER = 9999
 )
 
-func errorLog(err error, objList ...interface{}) {
+func CheckSentToLogger(err error) bool {
+	isSent := false
+	tailError := err
+	var fl failure.Failure
+	ind := 0
+	for {
+		fl, tailError = failure.UnwrapFailure(tailError)
+		if fl != nil && failure.CodeOf(fl) == FAILER_CODE_FLG_SENT_TO_LOGGER {
+			isSent = true
+			break
+		}
+		if tailError == nil {
+			break
+		}
+		//failuerのネストが深い場合は、15回で打ち切る
+		if ind > 15 {
+			break
+		}
+		ind++
+	}
+	return isSent
+}
+func errorLog(err error, objList ...interface{}) error {
 	//error message, relational data
 	errorMessageList := []string{"err: " + err.Error()}
 	for ind, obj := range objList {
-		relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
+		objStr := "nil"
+		if obj != nil {
+			objStr = fmt.Sprintf("%v", obj)
+		}
+		relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, objStr)
 		errorMessageList = append(errorMessageList, relationalStr)
 	}
 	//stacktrace
@@ -47,7 +75,10 @@ func errorLog(err error, objList ...interface{}) {
 
 	//logging & send to sentry server
 	log.Println(strings.Join(errorMessageList, "\n"))
-	sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+	if !CheckSentToLogger(err) {
+		sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+	}
+	return failure.NewFailure(err, []failure.Field{failure.WithCode(FAILER_CODE_FLG_SENT_TO_LOGGER)})
 }
 
 func New(errStr string) error {
@@ -77,16 +108,14 @@ func CallStackOf(err error) (stackTrace string, ok bool) {
 	}
 }
 func Wrap(err error, objList ...interface{}) error {
-	const KEY_WRAP_COUNT = "wrapCnt"
 	if err == nil {
 		return err
 	}
 
-	// originalStack := failure.CallStackOf(err)
-	// originalMessage := failure.MessageOf(err)
-	originalCode := failure.CodeOf(err)
+	failerErrorCode := failure.CodeOf(err)
+	// failer.WithCode(err, failerErrorCode)
+	log.Println("failerErrorCode: ", failerErrorCode)
 
-	//errに、すでにwrapされた回数があれば、それを取得して、+1する
 	var failureCtx *failure.Context
 	objStrList := []string{}
 	for _, obj := range objList {
@@ -97,11 +126,12 @@ func Wrap(err error, objList ...interface{}) error {
 		}
 		objStrList = append(objStrList, objStr)
 	}
-	if objStrList != nil && len(objStrList) > 0 {
+	if len(objStrList) > 0 {
 		failureCtx = &failure.Context{"params": fmt.Sprintf("%v", objStrList)}
 	}
 
-	if originalCode != nil {
+	//If not wrapped with failer yet, then create new Failer Error
+	if failerErrorCode == nil {
 		var err error
 		if failureCtx != nil {
 			err = failure.New(err, failureCtx)
@@ -109,48 +139,38 @@ func Wrap(err error, objList ...interface{}) error {
 			err = failure.New(err)
 		}
 
-		stack := failure.CallStackOf(err)
-		if stack != nil {
-			log.Println("stacktrace---------------------------------------------------------------------------:")
-			for _, f := range stack.Frames() {
-				p := f.Path()
-				log.Printf("%s:%d [%s.%s]\n", p, f.Line(), f.Pkg(), f.Func())
-			}
-		} else {
-			log.Println("stacktrace is not found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!.")
-
-		}
+		// stack := failure.CallStackOf(err)
+		// if stack != nil {
+		// 	log.Println("stacktrace---------------------------------------------------------------------------:")
+		// 	for _, f := range stack.Frames() {
+		// 		p := f.Path()
+		// 		log.Printf("%s:%d [%s.%s]\n", p, f.Line(), f.Pkg(), f.Func())
+		// 	}
+		// } else {
+		// 	log.Println("stacktrace is not found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!.")
+		// }
 		return failure.New(err, failureCtx)
 	} else {
+		//If wrapped with failer already, and has context, then add new context
 		if failureCtx != nil {
 			return failure.Wrap(err, failureCtx)
 		} else {
-			return failure.Wrap(err)
+			//If failer wrapped already, and has no context, then return the original error
+			return err
 		}
 	}
-
-	//stacktrace
-	// pc, fileName, line, ok := runtime.Caller(1)
-	// stackTraceStr := ""
-	// if ok {
-	// 	stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
-	// } else {
-	// 	stackTraceStr = fmt.Sprintf("can't get line data \n")
-	// }
-	// errorMessageList = append(errorMessageList, "", stackTraceStr)
-	// return pkg_errors.Wrap(err, strings.Join(errorMessageList, "\n"))
 }
 
 func ReturnError(err error, objList ...interface{}) error {
 	if err != nil {
-		errorLog(err, objList)
+		err = errorLog(err, objList)
 	}
 	return Wrap(err, objList...)
 }
 func ReturnErrorStr(errStr string) error {
 	if errStr != "" {
 		err := New(errStr)
-		errorLog(err)
+		err = errorLog(err)
 		return err
 	}
 	return nil
@@ -159,21 +179,21 @@ func ReturnErrorStr(errStr string) error {
 func PanicError(err error, objList ...interface{}) {
 	if err != nil {
 		err = Wrap(err, objList...)
-		errorLog(err, objList)
+		err = errorLog(err, objList)
 		panic(err)
 	}
 }
 func PanicErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
 		err := New(errStr)
-		errorLog(err, objList...)
+		err = errorLog(err, objList...)
 		panic(err)
 	}
 }
 func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 	if err != nil {
 		err = Wrap(err, objList...)
-		errorLog(err, objList)
+		err = errorLog(err, objList)
 		//c.Status(status)
 		f()
 		panic(err)
