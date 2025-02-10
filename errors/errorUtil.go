@@ -77,7 +77,11 @@ func errorLog(err error, objList ...interface{}) error {
 	log.Println(strings.Join(errorMessageList, "\n"))
 	if !CheckSentToLogger(err) {
 		sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+		err = LoggerSentFlagOn(err)
 	}
+	return err
+}
+func LoggerSentFlagOn(err error) error {
 	return failure.NewFailure(err, []failure.Field{failure.WithCode(FAILER_CODE_FLG_SENT_TO_LOGGER)})
 }
 
