@@ -142,18 +142,7 @@ func Wrap(err error, objList ...interface{}) error {
 		} else {
 			err = failure.New(err)
 		}
-
-		// stack := failure.CallStackOf(err)
-		// if stack != nil {
-		// 	log.Println("stacktrace---------------------------------------------------------------------------:")
-		// 	for _, f := range stack.Frames() {
-		// 		p := f.Path()
-		// 		log.Printf("%s:%d [%s.%s]\n", p, f.Line(), f.Pkg(), f.Func())
-		// 	}
-		// } else {
-		// 	log.Println("stacktrace is not found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!.")
-		// }
-		return failure.New(err, failureCtx)
+		return err
 	} else {
 		//If wrapped with failer already, and has context, then add new context
 		if failureCtx != nil {
