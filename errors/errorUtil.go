@@ -49,7 +49,7 @@ func CheckSentToLogger(err error) bool {
 	}
 	return isSent
 }
-func errorLog(err error, objList ...interface{}) error {
+func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 	//error message, relational data
 	errorMessageList := []string{"err: " + err.Error()}
 	for ind, obj := range objList {
@@ -75,7 +75,7 @@ func errorLog(err error, objList ...interface{}) error {
 
 	//logging & send to sentry server
 	log.Println(strings.Join(errorMessageList, "\n"))
-	if !CheckSentToLogger(err) {
+	if sendLogger && !CheckSentToLogger(err) {
 		sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
 		err = LoggerSentFlagOn(err)
 	}
@@ -154,16 +154,43 @@ func Wrap(err error, objList ...interface{}) error {
 	// }
 }
 
+func CatchPanic(errPt *error) {
+	var err error
+	if r := recover(); r != nil {
+		var ok bool
+		if err, ok = r.(error); !ok {
+			// Set error that will call the global error handler
+			err = Errorf("%v", r)
+		}
+		stackTrace, ok := CallStackOf(err)
+		if !ok {
+			//stacktraceを出力
+			for depth := 0; ; depth++ {
+				pc, src, line, ok := runtime.Caller(depth)
+				if !ok || depth > 30 { //３０行までしかStacktrace表示しない
+					break
+				}
+				stackTrace += fmt.Sprintf(" -> %d: %s: %s(%d)\n", depth, runtime.FuncForPC(pc).Name(), src, line)
+			}
+		}
+		log.Println("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
+		//panicタイミングではsentryに送信しない
+		// if !gw_errors.CheckSentToLogger(err) {
+		// 	sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
+		// }
+		*errPt = err
+	}
+}
 func ReturnError(err error, objList ...interface{}) error {
 	if err != nil {
-		err = errorLog(err, objList)
+		err = errorLog(err, false, objList...)
 	}
 	return Wrap(err, objList...)
 }
 func ReturnErrorStr(errStr string) error {
 	if errStr != "" {
 		err := New(errStr)
-		err = errorLog(err)
+		err = errorLog(err, false)
 		return err
 	}
 	return nil
@@ -172,21 +199,21 @@ func ReturnErrorStr(errStr string) error {
 func PanicError(err error, objList ...interface{}) {
 	if err != nil {
 		err = Wrap(err, objList...)
-		err = errorLog(err, objList)
+		err = errorLog(err, false, objList...)
 		panic(err)
 	}
 }
 func PanicErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
 		err := New(errStr)
-		err = errorLog(err, objList...)
+		err = errorLog(err, false, objList...)
 		panic(err)
 	}
 }
 func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 	if err != nil {
 		err = Wrap(err, objList...)
-		err = errorLog(err, objList)
+		err = errorLog(err, false, objList...)
 		//c.Status(status)
 		f()
 		panic(err)
@@ -196,12 +223,12 @@ func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 func PrintError(err error, objList ...interface{}) {
 	if err != nil {
 		err = Wrap(err, objList...)
-		errorLog(err, objList)
+		errorLog(err, true, objList)
 	}
 }
 func PrintErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
 		err := New(errStr)
-		errorLog(err, objList)
+		errorLog(err, true, objList...)
 	}
 }
