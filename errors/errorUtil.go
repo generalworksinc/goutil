@@ -116,7 +116,7 @@ func Wrap(err error, objList ...interface{}) error {
 		return err
 	}
 
-	// failerErrorCode := failure.CodeOf(err)
+	failerErrorCode := failure.CodeOf(err)
 	// failer.WithCode(err, failerErrorCode)
 	// log.Println("failerErrorCode: ", failerErrorCode)
 
@@ -135,23 +135,23 @@ func Wrap(err error, objList ...interface{}) error {
 	}
 
 	//If not wrapped with failer yet, then create new Failer Error
-	// if failerErrorCode == nil {
-	// 	var err error
-	// 	if failureCtx != nil {
-	// 		err = failure.New(err, failureCtx)
-	// 	} else {
-	// 		err = failure.New(err)
-	// 	}
-	// 	return err
-	// } else {
-	//If wrapped with failer already, and has context, then add new context
-	if failureCtx != nil {
-		return failure.Wrap(err, failureCtx)
-	} else {
-		//If failer wrapped already, and has no context, then return the original error
+	if failerErrorCode == nil {
+		var err error
+		if failureCtx != nil {
+			err = failure.New(err, failureCtx)
+		} else {
+			err = failure.New(err)
+		}
 		return err
+	} else {
+		//If wrapped with failer already, and has context, then add new context
+		if failureCtx != nil {
+			return failure.Wrap(err, failureCtx)
+		} else {
+			//If failer wrapped already, and has no context, then return the original error
+			return err
+		}
 	}
-	// }
 }
 
 func CatchPanic(errPt *error) {
@@ -178,7 +178,7 @@ func CatchPanic(errPt *error) {
 		// if !gw_errors.CheckSentToLogger(err) {
 		// 	sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
 		// }
-		errPt = &err
+		*errPt = err
 	}
 }
 func ReturnError(err error, objList ...interface{}) error {
