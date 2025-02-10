@@ -179,7 +179,7 @@ func CatchPanic(errPt *error, sendLogger bool) {
 			sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
 			err = LoggerSentFlagOn(err)
 		}
-		*errPt = err
+		*errPt = Wrap(err)
 	}
 }
 func ReturnError(err error, objList ...interface{}) error {
