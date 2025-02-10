@@ -178,7 +178,7 @@ func CatchPanic(errPt *error) {
 		// if !gw_errors.CheckSentToLogger(err) {
 		// 	sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
 		// }
-		*errPt = err
+		errPt = &err
 	}
 }
 func ReturnError(err error, objList ...interface{}) error {
