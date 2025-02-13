@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/dsnet/compress/bzip2"
+	gw_errors "github.com/generalworksinc/goutil/errors"
 )
 
 func CompressString(str string) (string, error) {
