@@ -36,12 +36,12 @@ func GenerateHash(saltBefore string, str string) (string, error) {
 
 	saltAfterBytes, err := generateRandomBytes(p.saltAfterLength)
 	if err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	saltAfter := string(saltAfterBytes)
 	saltBytes := []byte(saltBefore + saltAfter)
 	encodeHash, err := generateFromStr(str, saltBytes, saltAfterBytes, p)
-	return encodeHash, err
+	return encodeHash, gw_errors.Wrap(err)
 }
 
 func generateFromStr(str string, saltAll []byte, saltAfter []byte, p *params) (encodedHash string, err error) {
@@ -61,7 +61,7 @@ func generateRandomBytes(n uint32) ([]byte, error) {
 	b := make([]byte, n)
 	_, err := rand.Read(b)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 	return b, nil
 }
@@ -71,7 +71,7 @@ func ComparePasswordAndHash(password, salteBefore string, encodedHash string) (m
 	// hash.
 	p, saltAfter, hash, err := DecodeHash(encodedHash)
 	if err != nil {
-		return false, err
+		return false, gw_errors.Wrap(err)
 	}
 	saltBytes := []byte(salteBefore + string(saltAfter))
 	// Derive the key from the other password using the same parameters.
@@ -95,7 +95,7 @@ func DecodeHash(encodedHash string) (p *params, salt, hash []byte, err error) {
 	var version int
 	_, err = fmt.Sscanf(vals[2], "v=%d", &version)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, gw_errors.Wrap(err)
 	}
 	if version != argon2.Version {
 		return nil, nil, nil, gw_errors.Wrap(ErrIncompatibleVersion)
@@ -104,18 +104,18 @@ func DecodeHash(encodedHash string) (p *params, salt, hash []byte, err error) {
 	p = &params{}
 	_, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &p.memory, &p.iterations, &p.parallelism)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, gw_errors.Wrap(err)
 	}
 
 	salt, err = base64.RawStdEncoding.DecodeString(vals[4])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, gw_errors.Wrap(err)
 	}
 	p.saltAfterLength = uint32(len(salt))
 
 	hash, err = base64.RawStdEncoding.DecodeString(vals[5])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, gw_errors.Wrap(err)
 	}
 	p.keyLength = uint32(len(hash))
 

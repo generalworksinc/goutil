@@ -2,16 +2,17 @@ package gw_compress
 
 import (
 	"bytes"
-	"github.com/dsnet/compress/bzip2"
 	"io"
 	"strings"
 	"unsafe"
+
+	"github.com/dsnet/compress/bzip2"
 )
 
 func CompressString(str string) (string, error) {
 	buf, err := Compress(strings.NewReader(str))
 	if err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	} else {
 		return buf.String(), nil
 	}
@@ -20,12 +21,12 @@ func Compress(r io.Reader) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
 	zw, err := bzip2.NewWriter(buf, &bzip2.WriterConfig{Level: bzip2.BestCompression})
 	if err != nil {
-		return buf, err
+		return buf, gw_errors.Wrap(err)
 	}
 	defer zw.Close()
 
 	if _, err := io.Copy(zw, r); err != nil {
-		return buf, err
+		return buf, gw_errors.Wrap(err)
 	}
 	return buf, nil
 }
@@ -35,7 +36,7 @@ func ExtractString(str string) (string, error) {
 	reader, err := bzip2.NewReader(strings.NewReader(str), new(bzip2.ReaderConfig))
 	defer reader.Close()
 	if err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	} else {
 		reader.Read(bytes)
 		retStr := *(*string)(unsafe.Pointer(&bytes))

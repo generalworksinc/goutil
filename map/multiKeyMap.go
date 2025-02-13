@@ -47,7 +47,7 @@ type jSONDoubleKeyMap[T1 comparable, T2 comparable, T3 any] map[T1]map[T2]T3
 func (dkm *DoubleKeyMap[T1, T2, T3]) UnmarshalJSON(b []byte) error {
 	var jsonMap jSONDoubleKeyMap[T1, T2, T3]
 	if err := json.Unmarshal(b, &jsonMap); err != nil {
-		return err
+		return gw_errors.Wrap(err)
 	}
 
 	*dkm = make(DoubleKeyMap[T1, T2, T3])

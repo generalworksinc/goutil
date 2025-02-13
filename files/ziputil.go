@@ -2,6 +2,8 @@ package gw_files
 
 import (
 	"bytes"
+
+	gw_errors "github.com/generalworksinc/goutil/errors"
 	"github.com/yeka/zip"
 )
 
@@ -16,17 +18,17 @@ func CreateZipBuffer(fileName string, content []byte, password string) (*bytes.B
 	// Create の代わりに Encrypt を使う
 	f, err := w.Encrypt(fileName, password, zip.AES256Encryption)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 
 	_, err = f.Write(content)
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 
 	err = w.Close()
 	if err != nil {
-		return nil, err
+		return nil, gw_errors.Wrap(err)
 	}
 
 	return buf, nil

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	gw_common "github.com/generalworksinc/goutil/common"
+	gw_errors "github.com/generalworksinc/goutil/errors"
 )
 
 func CNullStrByJson(json map[string]interface{}, key string) string {
@@ -116,13 +117,13 @@ func CompressStr(s string) (string, error) {
 	var b bytes.Buffer
 	gz := gzip.NewWriter(&b)
 	if _, err := gz.Write([]byte(s)); err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	if err := gz.Flush(); err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	if err := gz.Close(); err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	compressedStr := base64.StdEncoding.EncodeToString(b.Bytes())
 	return compressedStr, nil
@@ -130,13 +131,13 @@ func CompressStr(s string) (string, error) {
 func DecompressStr(s string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 	fmt.Println(data)
 	rdata := bytes.NewReader(data)
 	r, err := gzip.NewReader(rdata)
 	if err != nil {
-		return "", err
+		return "", gw_errors.Wrap(err)
 	}
 
 	decompressedBytes, _ := ioutil.ReadAll(r)

@@ -64,7 +64,7 @@ func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 	app.Use(func(c *fiber.Ctx) (err error) {
 		// Catch panics
 		defer gw_errors.CatchPanic(&err, false) //このタイミングではエラーログをsentryに送信せず、Errorhandlerに任せる
-		// Return err if exist, else move to next handlerF
+		// return gw_errors.Wrap(err) if exist, else move to next handlerF
 		return c.Next()
 	})
 	app.Static("/static", "static")
