@@ -11,7 +11,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
+
+	gw_common "github.com/generalworksinc/goutil/common"
 )
 
 func CNullStrByJson(json map[string]interface{}, key string) string {
@@ -81,7 +82,7 @@ func StreamToString(stream io.Reader) string {
 	return buf.String()
 }
 
-var randSrc = rand.NewSource(time.Now().UnixNano())
+var randSrc = rand.New(rand.NewChaCha8(gw_common.CryptoRandSeed()))
 
 const (
 	rs6Letters       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -95,10 +96,10 @@ const (
 // rand.Seed(time.Now().UnixNano())
 func RandString6(n int) string {
 	b := make([]byte, n)
-	cache, remain := randSrc.Int63(), rs6LetterIdxMax
+	cache, remain := randSrc.Int64(), rs6LetterIdxMax
 	for i := n - 1; i >= 0; {
 		if remain == 0 {
-			cache, remain = randSrc.Int63(), rs6LetterIdxMax
+			cache, remain = randSrc.Int64(), rs6LetterIdxMax
 		}
 		idx := int(cache & rs6LetterIdxMask)
 		if idx < len(rs6Letters) {
