@@ -249,6 +249,9 @@ func (ctx WebCtx) Body() []byte {
 func (ctx WebCtx) SendStream(stream io.Reader, size ...int) error {
 	return ctx.Ctx.(*fiber.Ctx).SendStream(stream, size...)
 }
+func (ctx WebCtx) BodyWriter() io.Writer {
+	return ctx.Ctx.(*fiber.Ctx).Context().Response.BodyWriter()
+}
 
 // HTTP Headers were copied from net/http.
 const (
