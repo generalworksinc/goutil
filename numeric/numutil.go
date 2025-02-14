@@ -2,7 +2,6 @@ package gw_numeric
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -76,19 +75,4 @@ func CNullStrInt(num string) *int {
 	} else {
 		return nil
 	}
-}
-
-func zip_string(a, b []string) ([][]string, error) {
-
-	if len(a) != len(b) {
-		return nil, fmt.Errorf("zip: arguments must be of same length")
-	}
-
-	r := make([][]string, len(a), len(a))
-
-	for i, e := range a {
-		r[i] = []string{e, b[i]}
-	}
-
-	return r, nil
 }

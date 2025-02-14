@@ -69,7 +69,10 @@ func StreamToByte(stream io.Reader) []byte {
 		return []byte{}
 	}
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(stream)
+	_, err := buf.ReadFrom(stream)
+	if err != nil {
+		return []byte{}
+	}
 	return buf.Bytes()
 }
 
@@ -78,7 +81,10 @@ func StreamToString(stream io.Reader) string {
 		return ""
 	}
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(stream)
+	_, err := buf.ReadFrom(stream)
+	if err != nil {
+		return ""
+	}
 	return buf.String()
 }
 
@@ -172,4 +178,19 @@ func Substring(str string, start, length int) string {
 func Substr(str string, start, end int) string {
 	r := []rune(str)
 	return string(r[start:end])
+}
+
+func ZipString(a, b []string) ([][]string, error) {
+
+	if len(a) != len(b) {
+		return nil, gw_errors.New("zip: arguments must be of same length")
+	}
+
+	r := make([][]string, len(a))
+
+	for i, e := range a {
+		r[i] = []string{e, b[i]}
+	}
+
+	return r, nil
 }

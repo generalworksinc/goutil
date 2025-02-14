@@ -35,14 +35,16 @@ func Compress(r io.Reader) (*bytes.Buffer, error) {
 func ExtractString(str string) (string, error) {
 	bytes := []byte{}
 	reader, err := bzip2.NewReader(strings.NewReader(str), new(bzip2.ReaderConfig))
-	defer reader.Close()
 	if err != nil {
 		return "", gw_errors.Wrap(err)
-	} else {
-		reader.Read(bytes)
-		retStr := *(*string)(unsafe.Pointer(&bytes))
-		return retStr, nil
 	}
+	defer reader.Close()
+	_, err = reader.Read(bytes)
+	if err != nil {
+		return "", gw_errors.Wrap(err)
+	}
+	retStr := *(*string)(unsafe.Pointer(&bytes))
+	return retStr, nil
 }
 
 func Extract(zr io.Reader) (*bzip2.Reader, error) {

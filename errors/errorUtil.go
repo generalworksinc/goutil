@@ -224,12 +224,12 @@ func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 func PrintError(err error, objList ...interface{}) {
 	if err != nil {
 		err = Wrap(err, objList...)
-		errorLog(err, true, objList)
+		_ = errorLog(err, true, objList)
 	}
 }
 func PrintErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
 		err := New(errStr)
-		errorLog(err, true, objList...)
+		_ = errorLog(err, true, objList...)
 	}
 }
