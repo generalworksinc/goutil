@@ -68,7 +68,7 @@ func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 		if ok {
 			stackTraceStr = fmt.Sprintf("memory address: %v, file: %v, line: %v \n", pc, fileName, line)
 		} else {
-			stackTraceStr = fmt.Sprintf("can't get line data \n")
+			stackTraceStr = "can't get line data \n"
 		}
 	}
 	errorMessageList = append(errorMessageList, "", stackTraceStr)

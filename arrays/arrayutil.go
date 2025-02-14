@@ -10,7 +10,7 @@ func ContainsUint(array []uint, value uint) bool {
 }
 func GetKeys(m map[string]interface{}) []string {
 	ks := []string{}
-	for k, _ := range m {
+	for k := range m {
 		ks = append(ks, k)
 	}
 	return ks

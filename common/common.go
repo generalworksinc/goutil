@@ -22,7 +22,7 @@ func (set *Set) Put(key interface{}) {
 }
 func (set *Set) Values() []interface{} {
 	keys := []interface{}{}
-	for k, _ := range set.dataMap {
+	for k := range set.dataMap {
 		keys = append(keys, k)
 	}
 	return keys
@@ -44,7 +44,7 @@ func (set *StringSet) Put(key string) {
 }
 func (set *StringSet) Values() []string {
 	keys := []string{}
-	for k, _ := range set.dataMap {
+	for k := range set.dataMap {
 		keys = append(keys, k)
 	}
 	return keys
