@@ -83,8 +83,6 @@ func StreamToString(stream io.Reader) string {
 	return buf.String()
 }
 
-var randSrc = rand.New(rand.NewChaCha8(gw_common.CryptoRandSeed()))
-
 const (
 	rs6Letters       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	rs6LetterIdxBits = 6
@@ -95,7 +93,12 @@ const (
 // please set random seed before using.
 // for example.
 // rand.Seed(time.Now().UnixNano())
+
+// When multiple goroutines use the same ChaCha8 generator, internal state conflicts may occur, so synchronization (mutex) needs to be introduced.
+// var randSrc = rand.New(rand.NewChaCha8(gw_common.CryptoRandSeed()))
+
 func RandString6(n int) string {
+	randSrc := rand.New(rand.NewChaCha8(gw_common.CryptoRandSeed()))
 	b := make([]byte, n)
 	cache, remain := randSrc.Int64(), rs6LetterIdxMax
 	for i := n - 1; i >= 0; {
