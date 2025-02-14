@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand/v2"
@@ -136,15 +135,14 @@ func DecompressStr(s string) (string, error) {
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
-	fmt.Println(data)
 	rdata := bytes.NewReader(data)
 	r, err := gzip.NewReader(rdata)
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
 
-	decompressedBytes, _ := ioutil.ReadAll(r)
-	return string(decompressedBytes), nil
+	decompressedBytes, err := ioutil.ReadAll(r)
+	return string(decompressedBytes), gw_errors.Wrap(err)
 }
 
 var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")

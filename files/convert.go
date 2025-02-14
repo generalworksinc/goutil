@@ -41,7 +41,11 @@ func ConvFileToByte(uri string, data string, isEncrypt bool, encryptKey []byte) 
 		}
 
 	} else if data != "" && strings.Index(data, "data:") == 0 {
-		mimeType := data[len("data:"):strings.Index(data, ";base64")]
+		data64Ind := strings.Index(data, ";base64")
+		if data64Ind == -1 {
+			return nil, "", gw_errors.New("not contains ';base64'")
+		}
+		mimeType := data[len("data:"):data64Ind]
 		log.Println("mimeType:", mimeType)
 		ext, err := mime.ExtensionsByType(mimeType)
 		if err != nil {
@@ -67,10 +71,12 @@ func ConvFileToByte(uri string, data string, isEncrypt bool, encryptKey []byte) 
 			imageBody = bytes.NewReader(imageBodyBytes)
 		}
 
-		prefix = ext[0]
-		//bug対応(なぜかjpegのprefixがjpe、が設定されている場合があるため)
-		if prefix == ".jpe" {
-			prefix = ".jpg"
+		if len(ext) > 0 {
+			prefix = ext[0]
+			//bug対応(なぜかjpegのprefixがjpe、が設定されている場合があるため)
+			if prefix == ".jpe" {
+				prefix = ".jpg"
+			}
 		}
 	}
 

@@ -50,15 +50,17 @@ func NormalizeAddress(address string) string {
 			// } else {
 			// 	result += matches[i]
 			// }
-			kanjiNum := matches[i][1]
-			suffix := matches[i][2]
+			if len(matches[i]) >= 3 {
+				kanjiNum := matches[i][1]
+				suffix := matches[i][2]
 
-			// Convert only the kanji number portion
-			if num, err := cjk2num.Convert(kanjiNum); err == nil {
-				result += strconv.FormatInt(num, 10) + suffix
-			} else {
-				result += matches[i][0]
+				// Convert only the kanji number portion
+				if num, err := cjk2num.Convert(kanjiNum); err == nil {
+					result += strconv.FormatInt(num, 10) + suffix
+					continue
+				}
 			}
+			result += matches[i][0]
 		}
 	}
 	address = result
