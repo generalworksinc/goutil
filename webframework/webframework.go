@@ -1,8 +1,10 @@
 package gw_web
 
 import (
+	"context"
 	"io"
 	"log"
+	"time"
 
 	"mime/multipart"
 
@@ -101,6 +103,18 @@ func (app WebApp) Post(path string, handlers ...WebHandler) {
 func (app WebApp) Listen(addr string) error {
 	a := app.App.(*fiber.App)
 	return a.Listen(addr)
+}
+func (app WebApp) ShutdownWithTimeout(duration time.Duration) error {
+	a := app.App.(*fiber.App)
+	return a.ShutdownWithTimeout(duration)
+}
+func (app WebApp) ShutdownWithContext(ctx context.Context) error {
+	a := app.App.(*fiber.App)
+	return a.ShutdownWithContext(ctx)
+}
+func (app WebApp) Shutdown() error {
+	a := app.App.(*fiber.App)
+	return a.Shutdown()
 }
 
 // WebGroup ////////////////////////////////////////////////
