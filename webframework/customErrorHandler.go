@@ -34,10 +34,10 @@ type ErrorData struct {
 func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) string) func(ctx *WebCtx, err error) error {
 	return func(ctx *WebCtx, err error) error {
 		defer func() {
-			err := recover()
-			if err != nil {
+			r := recover()
+			if r != nil {
 				log.Println("panic occured in CustomHTTPErrorHandler.")
-				log.Println("Recover!:", err)
+				log.Println("Recover!:", r)
 			}
 		}()
 
@@ -103,25 +103,50 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 		errorJson, _ := json.Marshal(errorData)
 		log.Println(string(errorJson))
 
-		if !gw_errors.CheckSentToLogger(err) {
+		isSentToLogger := gw_errors.CheckSentToLogger(err)
+		log.Println("isSentToLogger on CustomHTTPErrorHandler: ", isSentToLogger)
+		if !isSentToLogger {
 			if errorData.Ua != "" && errorData.Url != "http:///" && errorData.Message != "Bad Request" {
+				// 安全にSentryにメッセージを送る
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("Failed to send error to Sentry: %v", r)
+						}
+					}()
 
-				errorDataForSentry := errorData
-				errorDataForSentry.StackTrace = ""
-				errorDataForSentry.Error = ""
+					errorDataForSentry := errorData
+					errorDataForSentry.StackTrace = ""
+					errorDataForSentry.Error = ""
 
-				//format json
-				errorStr := ""
-				errorJsonForSentry, _ := json.Marshal(errorDataForSentry)
-				var formatedJsonBytes bytes.Buffer
-				err := json.Indent(&formatedJsonBytes, errorJsonForSentry, "", "  ") // indentは2スペース
-				if err != nil {
-					log.Printf("JSONの整形に失敗しました: %v\n", err)
-					errorStr = string(errorJsonForSentry)
-				} else {
-					errorStr = formatedJsonBytes.String()
-				}
-				sentry.CaptureMessage(fmt.Sprintf("error on errorhandler:: %s\n\n%s\n\n%s", errorData.Error, errorData.StackTrace, errorStr))
+					//format json
+					errorStr := ""
+					errorJsonForSentry, _ := json.Marshal(errorDataForSentry)
+					var formatedJsonBytes bytes.Buffer
+					jsonErr := json.Indent(&formatedJsonBytes, errorJsonForSentry, "", "  ") // indentは2スペース
+					if jsonErr != nil {
+						log.Printf("JSONの整形に失敗しました: %v\n", jsonErr)
+						errorStr = string(errorJsonForSentry)
+					} else {
+						errorStr = formatedJsonBytes.String()
+					}
+
+					// エラーメッセージを安全に作成
+					sentryMsg := ""
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								sentryMsg = "Error creating Sentry message"
+								log.Printf("Failed to format Sentry message: %v", r)
+							}
+						}()
+						sentryMsg = fmt.Sprintf("error on errorhandler:: %s\n\n%s\n\n%s", errorData.Error, errorData.StackTrace, errorStr)
+					}()
+
+					log.Println("sentry.CaptureMessage on errorHandler start!")
+					sentry.CaptureMessage(sentryMsg)
+					log.Println("sentry.CaptureMessage on errorHandler end!")
+				}()
 			}
 		}
 

@@ -90,7 +90,9 @@ func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 
 	//logging & send to sentry server
 	log.Println(strings.Join(errorMessageList, "\n"))
-	if sendLogger && !CheckSentToLogger(err) {
+	isSentToLogger := CheckSentToLogger(err)
+	log.Println("isSentToLogger on errorLog: ", isSentToLogger)
+	if sendLogger && !isSentToLogger {
 		// Safely send to Sentry
 		func() {
 			defer func() {
@@ -207,7 +209,9 @@ func CatchPanic(errPt *error, sendLogger bool) {
 			}
 		}
 		log.Println("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
-		if sendLogger && !CheckSentToLogger(err) {
+		isSentToLogger := CheckSentToLogger(err)
+		log.Println("isSentToLogger on CatchPanic: ", isSentToLogger)
+		if sendLogger && !isSentToLogger {
 			//sentryに送信
 			log.Println("sentry.CaptureMessage on CatchPanic start!")
 			sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
