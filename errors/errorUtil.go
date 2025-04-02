@@ -98,7 +98,9 @@ func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 					log.Printf("Failed to send error to Sentry: %v", r)
 				}
 			}()
+			log.Println("sentry.CaptureMessage on errorLog start!")
 			sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+			log.Println("sentry.CaptureMessage on errorLog end!")
 		}()
 		err = LoggerSentFlagOn(err)
 	}
@@ -207,7 +209,9 @@ func CatchPanic(errPt *error, sendLogger bool) {
 		log.Println("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
 		if sendLogger && !CheckSentToLogger(err) {
 			//sentryに送信
+			log.Println("sentry.CaptureMessage on CatchPanic start!")
 			sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
+			log.Println("sentry.CaptureMessage on CatchPanic end!")
 			err = LoggerSentFlagOn(err)
 		}
 		*errPt = Wrap(err)
