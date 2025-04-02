@@ -50,12 +50,27 @@ func CheckSentToLogger(err error) bool {
 	return isSent
 }
 func errorLog(err error, sendLogger bool, objList ...interface{}) error {
+	// Recover from any panics during error logging
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Recovered from panic in errorLog: %v", r)
+		}
+	}()
+
 	//error message, relational data
 	errorMessageList := []string{"err: " + err.Error()}
 	for ind, obj := range objList {
 		objStr := "nil"
 		if obj != nil {
-			objStr = fmt.Sprintf("%v", obj)
+			// Safely convert object to string
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						objStr = fmt.Sprintf("[Error converting object to string: %v]", r)
+					}
+				}()
+				objStr = fmt.Sprintf("%v", obj)
+			}()
 		}
 		relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, objStr)
 		errorMessageList = append(errorMessageList, relationalStr)
@@ -76,7 +91,15 @@ func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 	//logging & send to sentry server
 	log.Println(strings.Join(errorMessageList, "\n"))
 	if sendLogger && !CheckSentToLogger(err) {
-		sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+		// Safely send to Sentry
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Failed to send error to Sentry: %v", r)
+				}
+			}()
+			sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+		}()
 		err = LoggerSentFlagOn(err)
 	}
 	return err
@@ -126,7 +149,15 @@ func Wrap(err error, objList ...interface{}) error {
 		// relationalStr := fmt.Sprintf("error relational data %v: %v\n", ind, obj)
 		objStr := "nil"
 		if obj != nil {
-			objStr = fmt.Sprintf("%v", obj)
+			// 安全な文字列変換のためのブロック
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						objStr = fmt.Sprintf("[Error converting object to string: %v]", r)
+					}
+				}()
+				objStr = fmt.Sprintf("%v", obj)
+			}()
 		}
 		objStrList = append(objStrList, objStr)
 	}
