@@ -106,7 +106,8 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 		isSentToLogger := gw_errors.CheckSentToLogger(err)
 		log.Println("isSentToLogger on CustomHTTPErrorHandler: ", isSentToLogger)
 		if !isSentToLogger {
-			if errorData.Ua != "" && errorData.Url != "http:///" && errorData.Message != "Bad Request" {
+			// if errorData.Ua != "" && errorData.Url != "http:///" && errorData.Message != "Bad Request" {
+			if errorData.Url != "http:///" && errorData.Message != "Bad Request" {
 				// 安全にSentryにメッセージを送る
 				func() {
 					defer func() {
