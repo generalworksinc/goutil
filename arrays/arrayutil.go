@@ -16,13 +16,17 @@ func GetKeys(m map[string]interface{}) []string {
 	return ks
 }
 
+// 順番を保持したまま重複を削除する
 func RemoveDuplicateStrList(array []string) []string {
-	// 順番は保持されません
-	retMap := map[string]interface{}{}
+	seen := make(map[string]bool)
+	result := []string{}
 	for _, v := range array {
-		retMap[v] = struct{}{}
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
 	}
-	return GetKeys(retMap)
+	return result
 }
 func ContainsString(array []string, value string) bool {
 	for _, v := range array {
