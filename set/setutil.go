@@ -7,8 +7,8 @@ type Set[K comparable, V any] map[K]V
 // type set[T comparable] Set[T, V]
 
 // NewSet は新しい空の集合を作成します（後方互換性のため）
-func NewSet[T comparable, V any]() Set[T, V] {
-	return make(Set[T, V])
+func NewSet[T comparable]() Set[T, bool] {
+	return make(Set[T, bool])
 }
 
 // Add は集合に要素を追加します（後方互換性のため）

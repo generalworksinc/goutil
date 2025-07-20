@@ -13,14 +13,14 @@ type testStruct struct {
 
 // 元のテスト（後方互換性のため）
 func TestNewSet(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 	if len(s) != 0 {
 		t.Errorf("Expected empty set, got %v", s)
 	}
 }
 
 func TestAdd(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 	s.Add("test")
 	if len(s) != 1 {
 		t.Errorf("Expected set with 1 element, got %v", s)
@@ -31,7 +31,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestContains(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 	s.Add("test")
 	if !s.Contains("test") {
 		t.Error("Expected set to contain 'test'")
@@ -42,7 +42,7 @@ func TestContains(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 	s.Add("test")
 	s.Remove("test")
 	if s.Contains("test") {
@@ -54,7 +54,7 @@ func TestRemove(t *testing.T) {
 }
 
 func TestToSlice(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 	s.Add("one")
 	s.Add("two")
 	s.Add("three")
@@ -80,7 +80,7 @@ func TestToSlice(t *testing.T) {
 
 // 空のセットに対するテスト
 func TestEmptySet(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 	slice := s.ToSlice()
 	if len(slice) != 0 {
 		t.Errorf("Expected empty slice, got %v", slice)
@@ -89,7 +89,7 @@ func TestEmptySet(t *testing.T) {
 
 // 大量のデータに対するテスト
 func TestLargeDataSet(t *testing.T) {
-	s := NewSet[int, struct{}]()
+	s := NewSet[int]()
 	for i := 0; i < 1000; i++ {
 		s.Add(i)
 	}
@@ -108,7 +108,7 @@ func TestLargeDataSet(t *testing.T) {
 // 異なる型でのテスト
 func TestDifferentTypes(t *testing.T) {
 	// 整数型のセット
-	intSet := NewSet[int, struct{}]()
+	intSet := NewSet[int]()
 	intSet.Add(1)
 	intSet.Add(2)
 	if !intSet.Contains(1) || !intSet.Contains(2) {
@@ -116,7 +116,7 @@ func TestDifferentTypes(t *testing.T) {
 	}
 
 	// 文字列型のセット
-	stringSet := NewSet[string, struct{}]()
+	stringSet := NewSet[string]()
 	stringSet.Add("hello")
 	stringSet.Add("world")
 	if !stringSet.Contains("hello") || !stringSet.Contains("world") {
@@ -124,7 +124,7 @@ func TestDifferentTypes(t *testing.T) {
 	}
 
 	// 浮動小数点型のセット
-	floatSet := NewSet[float64, struct{}]()
+	floatSet := NewSet[float64]()
 	floatSet.Add(3.14)
 	floatSet.Add(2.71)
 	if !floatSet.Contains(3.14) || !floatSet.Contains(2.71) {
@@ -134,7 +134,7 @@ func TestDifferentTypes(t *testing.T) {
 
 // エッジケースのテスト
 func TestEdgeCases(t *testing.T) {
-	s := NewSet[string, struct{}]()
+	s := NewSet[string]()
 
 	// 空文字列の追加
 	s.Add("")
