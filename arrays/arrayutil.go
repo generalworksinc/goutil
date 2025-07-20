@@ -18,8 +18,13 @@ func GetKeys(m map[string]interface{}) []string {
 
 // 順番を保持したまま重複を削除する
 func RemoveDuplicateStrList(array []string) []string {
-	seen := make(map[string]bool)
-	result := []string{}
+	return RemoveDuplicate(array)
+}
+
+// 順番を保持したまま重複を削除する（Generics版）
+func RemoveDuplicate[T comparable](array []T) []T {
+	seen := make(map[T]bool)
+	result := []T{}
 	for _, v := range array {
 		if !seen[v] {
 			seen[v] = true
