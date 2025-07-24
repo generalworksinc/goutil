@@ -68,7 +68,9 @@ func NormalizeAddress(address string) string {
 	// 丁目、番地、号、階を統一
 
 	// 番や番地の後に数値が続く場合のみハイフンに変換
-	address = NormalizeAddressBanchiRe.ReplaceAllString(address, "$1-$3")
+	for NormalizeAddressBanchiRe.MatchString(address) {
+		address = NormalizeAddressBanchiRe.ReplaceAllString(address, "$1-$3")
+	}
 
 	// 残りの番、番地、丁目を削除（数値が続かない場合は変換しない）
 	address = strings.ReplaceAll(address, "号", "")
