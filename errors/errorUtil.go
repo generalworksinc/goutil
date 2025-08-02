@@ -221,20 +221,21 @@ func CatchPanic(errPt *error, sendLogger bool) {
 		*errPt = Wrap(err)
 	}
 }
-func ReturnError(err error, objList ...interface{}) error {
-	if err != nil {
-		err = errorLog(err, false, objList...)
-	}
-	return Wrap(err, objList...)
-}
-func ReturnErrorStr(errStr string) error {
-	if errStr != "" {
-		err := New(errStr)
-		err = errorLog(err, false)
-		return err
-	}
-	return nil
-}
+
+// func ReturnError(err error, objList ...interface{}) error {
+// 	if err != nil {
+// 		err = errorLog(err, false, objList...)
+// 	}
+// 	return Wrap(err, objList...)
+// }
+// func ReturnErrorStr(errStr string) error {
+// 	if errStr != "" {
+// 		err := New(errStr)
+// 		err = errorLog(err, false)
+// 		return err
+// 	}
+// 	return nil
+// }
 
 func PanicError(err error, objList ...interface{}) {
 	if err != nil {
@@ -262,12 +263,16 @@ func PanicErrorWithFunc(err error, f func(), objList ...interface{}) {
 
 func PrintError(err error, objList ...interface{}) {
 	if err != nil {
+		// エラーメッセージの頭に(Print)プレフィックスを追加
+		err = fmt.Errorf("(Print)%w", err)
 		err = Wrap(err, objList...)
 		_ = errorLog(err, true, objList)
 	}
 }
 func PrintErrorStr(errStr string, objList ...interface{}) {
 	if errStr != "" {
+		// エラーメッセージの頭に(Print)プレフィックスを追加
+		errStr = "(Print)" + errStr
 		err := New(errStr)
 		_ = errorLog(err, true, objList...)
 	}
