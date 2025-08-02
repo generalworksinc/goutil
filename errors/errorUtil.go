@@ -112,8 +112,12 @@ func LoggerSentFlagOn(err error) error {
 	return failure.NewFailure(err, []failure.Field{failure.WithCode(FAILER_CODE_FLG_SENT_TO_LOGGER)})
 }
 
-func New(errStr string) error {
-	return failure.New(GenericError, failure.Message(errStr))
+func New(errStr string, objList ...interface{}) error {
+	if len(objList) > 0 {
+		return Wrap(failure.New(GenericError, failure.Message(errStr)), objList...)
+	} else {
+		return failure.New(GenericError, failure.Message(errStr))
+	}
 }
 func Errorf(format string, a ...interface{}) error {
 	return Wrap(fmt.Errorf(format, a...))
