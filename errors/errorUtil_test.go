@@ -75,7 +75,7 @@ func TestErrorLogSendLoggerTrue(t *testing.T) {
 func TestReturnErrorNoSentry(t *testing.T) {
 	setupSentryTest()
 	originalErr := errors.New("original error for ReturnError")
-	err := ReturnError(originalErr)
+	err := Wrap(originalErr)
 
 	assert.Error(t, err)
 	assert.Empty(t, transport.Messages(), "Sentry should not capture message from ReturnError")
@@ -85,7 +85,7 @@ func TestReturnErrorNoSentry(t *testing.T) {
 
 func TestReturnErrorStrNoSentry(t *testing.T) {
 	setupSentryTest()
-	err := ReturnErrorStr("error string for ReturnErrorStr")
+	err := New("error string for ReturnErrorStr")
 
 	assert.Error(t, err)
 	assert.Empty(t, transport.Messages(), "Sentry should not capture message from ReturnErrorStr")
