@@ -25,7 +25,7 @@ var (
 
 func FormatJapaneseEraYear(targetTime *time.Time) (string, int, error) {
 	for _, era := range eraList {
-		if era.Start.Before(*targetTime) {
+		if !targetTime.Before(era.Start) { // 元日(0時)を含む当日から当該元号
 			//初年度は１を返す
 			return era.Name, targetTime.Year() - era.Start.Year() + 1, nil
 		}
@@ -36,7 +36,7 @@ func FormatJapaneseEraYear(targetTime *time.Time) (string, int, error) {
 // 例：令和1年12月3日
 func FormatJapaneseEraYYYYMD(targetTime *time.Time) (string, error) {
 	for _, era := range eraList {
-		if era.Start.Before(*targetTime) {
+		if !targetTime.Before(era.Start) { // 当日含む
 			//初年度は１を返す
 			return era.Name + strconv.Itoa(targetTime.Year()-era.Start.Year()+1) + "年" + targetTime.Format("1月2日"), nil
 		}

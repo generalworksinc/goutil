@@ -5,6 +5,9 @@ func CNullBoolByJson(json map[string]interface{}, key string) *bool {
 	if data == nil {
 		return nil
 	}
-	dataBool := data.(bool)
-	return &dataBool
+	v, ok := data.(bool)
+	if !ok {
+		return nil
+	}
+	return &v
 }

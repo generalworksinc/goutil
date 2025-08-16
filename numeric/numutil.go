@@ -28,7 +28,11 @@ func CNullStrIntByJson(json map[string]interface{}, key string) *int {
 	if data == nil {
 		return nil
 	}
-	return CNullStrInt(strings.TrimSpace(data.(string)))
+	s, ok := data.(string)
+	if !ok {
+		return nil
+	}
+	return CNullStrInt(strings.TrimSpace(s))
 }
 func CNullFloatByJson(json map[string]interface{}, key string) *float64 {
 	defer func() {
@@ -41,8 +45,11 @@ func CNullFloatByJson(json map[string]interface{}, key string) *float64 {
 		return nil
 	}
 
-	num := data.(float64)
-	return &num
+	v, ok := data.(float64)
+	if !ok {
+		return nil
+	}
+	return &v
 }
 func CNullFloatToIntByJson(json map[string]interface{}, key string) *int {
 	defer func() {
@@ -54,8 +61,12 @@ func CNullFloatToIntByJson(json map[string]interface{}, key string) *int {
 	if data == nil {
 		return nil
 	}
-	num := int(data.(float64))
-	return &num
+	fv, ok := data.(float64)
+	if !ok {
+		return nil
+	}
+	iv := int(fv)
+	return &iv
 }
 
 // breaking change

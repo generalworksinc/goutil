@@ -3,7 +3,6 @@ package gw_encode
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"strings"
 
 	gw_errors "github.com/generalworksinc/goutil/errors"
@@ -24,7 +23,7 @@ func Conversion(inStream io.Reader, outStream io.Writer) error {
 	return gw_errors.Wrap(err)
 }
 func Utf8ToSjis(str string) (string, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(strings.NewReader(str), japanese.ShiftJIS.NewEncoder()))
+	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(str), japanese.ShiftJIS.NewEncoder()))
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
@@ -33,7 +32,7 @@ func Utf8ToSjis(str string) (string, error) {
 
 // ShiftJIS から UTF-8
 func SjisToUtf8(str string) (string, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(strings.NewReader(str), japanese.ShiftJIS.NewDecoder()))
+	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(str), japanese.ShiftJIS.NewDecoder()))
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
@@ -42,7 +41,7 @@ func SjisToUtf8(str string) (string, error) {
 
 // UTF-8 から EUC-JP
 func Utf8ToEucjp(str string) (string, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(strings.NewReader(str), japanese.EUCJP.NewEncoder()))
+	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(str), japanese.EUCJP.NewEncoder()))
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
@@ -51,7 +50,7 @@ func Utf8ToEucjp(str string) (string, error) {
 
 // EUC-JP から UTF-8
 func EucjpToUtf8(str string) (string, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(strings.NewReader(str), japanese.EUCJP.NewDecoder()))
+	ret, err := io.ReadAll(transform.NewReader(strings.NewReader(str), japanese.EUCJP.NewDecoder()))
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
@@ -59,7 +58,7 @@ func EucjpToUtf8(str string) (string, error) {
 }
 
 func Utf8ByteToSjisByte(str []byte) ([]byte, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.ShiftJIS.NewEncoder()))
+	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.ShiftJIS.NewEncoder()))
 	if err != nil {
 		return []byte{}, gw_errors.Wrap(err)
 	}
@@ -68,7 +67,7 @@ func Utf8ByteToSjisByte(str []byte) ([]byte, error) {
 
 // ShiftJIS から UTF-8
 func SjisByteToUtf8Byte(str []byte) ([]byte, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.ShiftJIS.NewDecoder()))
+	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.ShiftJIS.NewDecoder()))
 	if err != nil {
 		return []byte{}, gw_errors.Wrap(err)
 	}
@@ -77,7 +76,7 @@ func SjisByteToUtf8Byte(str []byte) ([]byte, error) {
 
 // UTF-8 から EUC-JP
 func Utf8ByteToEucjpByte(str []byte) ([]byte, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.EUCJP.NewEncoder()))
+	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.EUCJP.NewEncoder()))
 	if err != nil {
 		return []byte{}, gw_errors.Wrap(err)
 	}
@@ -86,7 +85,7 @@ func Utf8ByteToEucjpByte(str []byte) ([]byte, error) {
 
 // EUC-JP から UTF-8
 func EucjpByteToUtf8Byte(str []byte) ([]byte, error) {
-	ret, err := ioutil.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.EUCJP.NewDecoder()))
+	ret, err := io.ReadAll(transform.NewReader(bytes.NewReader(str), japanese.EUCJP.NewDecoder()))
 	if err != nil {
 		return []byte{}, gw_errors.Wrap(err)
 	}

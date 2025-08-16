@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"strings"
-	"unsafe"
 
 	"github.com/dsnet/compress/bzip2"
 	gw_errors "github.com/generalworksinc/goutil/errors"
@@ -33,18 +32,17 @@ func Compress(r io.Reader) (*bytes.Buffer, error) {
 }
 
 func ExtractString(str string) (string, error) {
-	bytes := []byte{}
+	// bzip2 compressed string を展開
 	reader, err := bzip2.NewReader(strings.NewReader(str), new(bzip2.ReaderConfig))
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
 	defer reader.Close()
-	_, err = reader.Read(bytes)
-	if err != nil {
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, reader); err != nil {
 		return "", gw_errors.Wrap(err)
 	}
-	retStr := *(*string)(unsafe.Pointer(&bytes))
-	return retStr, nil
+	return buf.String(), nil
 }
 
 func Extract(zr io.Reader) (*bzip2.Reader, error) {

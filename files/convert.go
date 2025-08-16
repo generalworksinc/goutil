@@ -16,6 +16,7 @@ import (
 
 func ConvFileToByte(uri string, data string, isEncrypt bool, encryptKey []byte) (io.Reader, string, error) {
 	var imageBody io.Reader
+	var imageBodyBytes []byte
 	prefix := ""
 	fileContentType := ""
 	if uri != "" {
@@ -26,18 +27,21 @@ func ConvFileToByte(uri string, data string, isEncrypt bool, encryptKey []byte) 
 		defer response.Body.Close()
 		fileContentType = response.Header.Get("Content-Type")
 
+		// 常に一度読み切ってから、呼び出し側には Readable な Reader を返す
+		// （response.Body を直接返すと、この関数の defer Close によりクローズ済みになってしまうため）
+		var errRead error
+		imageBodyBytes, errRead = io.ReadAll(response.Body)
+		if errRead != nil {
+			return nil, "", gw_errors.Wrap(errRead)
+		}
 		if isEncrypt {
-			imageBodyBytes, err := io.ReadAll(response.Body)
-			if err != nil {
-				return nil, "", gw_errors.Wrap(err)
-			}
 			ciphertext, err := gw_crypto.EncryptAESGCM(encryptKey, imageBodyBytes)
 			if err != nil {
 				return nil, "", gw_errors.Wrap(err)
 			}
 			imageBody = bytes.NewReader(ciphertext)
 		} else {
-			imageBody = response.Body
+			imageBody = bytes.NewReader(imageBodyBytes)
 		}
 
 	} else if data != "" && strings.Index(data, "data:") == 0 {

@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"io"
-	"io/ioutil"
 	"math/rand/v2"
 	"regexp"
 	"strconv"
@@ -147,7 +146,7 @@ func DecompressStr(s string) (string, error) {
 		return "", gw_errors.Wrap(err)
 	}
 
-	decompressedBytes, err := ioutil.ReadAll(r)
+	decompressedBytes, err := io.ReadAll(r)
 	return string(decompressedBytes), gw_errors.Wrap(err)
 }
 

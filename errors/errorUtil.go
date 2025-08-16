@@ -270,7 +270,7 @@ func PrintError(err error, objList ...interface{}) {
 		// エラーメッセージの頭に(Print)プレフィックスを追加
 		err = fmt.Errorf("(Print)%w", err)
 		err = Wrap(err, objList...)
-		_ = errorLog(err, true, objList)
+		_ = errorLog(err, true, objList...)
 	}
 }
 func PrintErrorStr(errStr string, objList ...interface{}) {
