@@ -1,17 +1,15 @@
-package main
+package gw_common
 
 import (
 	"reflect"
 	"strings"
 	"testing"
-
-	gw_common "github.com/generalworksinc/goutil/common"
 )
 
 func TestClone_BasicTypes(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
 		original := 42
-		cloned, err := gw_common.Clone(original)
+		cloned, err := Clone(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -22,7 +20,7 @@ func TestClone_BasicTypes(t *testing.T) {
 
 	t.Run("string", func(t *testing.T) {
 		original := "hello"
-		cloned, err := gw_common.Clone(original)
+		cloned, err := Clone(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -33,7 +31,7 @@ func TestClone_BasicTypes(t *testing.T) {
 
 	t.Run("bool", func(t *testing.T) {
 		original := true
-		cloned, err := gw_common.Clone(original)
+		cloned, err := Clone(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -46,7 +44,7 @@ func TestClone_BasicTypes(t *testing.T) {
 func TestClone_Pointers(t *testing.T) {
 	t.Run("nil pointer", func(t *testing.T) {
 		var original *int
-		cloned, err := gw_common.CloneP(original)
+		cloned, err := CloneP(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -59,7 +57,7 @@ func TestClone_Pointers(t *testing.T) {
 		originalValue := 100
 		originalPtr := &originalValue
 
-		clonedPtr, err := gw_common.CloneP(originalPtr)
+		clonedPtr, err := CloneP(originalPtr)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -80,7 +78,7 @@ func TestClone_Pointers(t *testing.T) {
 func TestClone_Slices(t *testing.T) {
 	t.Run("slice of int", func(t *testing.T) {
 		original := []int{1, 2, 3, 4}
-		cloned, err := gw_common.CloneSlice(original)
+		cloned, err := CloneSlice(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -102,7 +100,7 @@ func TestClone_Slices(t *testing.T) {
 	t.Run("slice of pointers", func(t *testing.T) {
 		v1, v2 := 10, 20
 		original := []*int{&v1, &v2}
-		cloned, err := gw_common.CloneSliceP(original)
+		cloned, err := CloneSliceP(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -127,7 +125,7 @@ func TestClone_Slices(t *testing.T) {
 func TestClone_Maps(t *testing.T) {
 	t.Run("map[K]V", func(t *testing.T) {
 		original := map[string]int{"a": 1, "b": 2}
-		cloned, err := gw_common.CloneMap(original)
+		cloned, err := CloneMap(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -145,7 +143,7 @@ func TestClone_Maps(t *testing.T) {
 	t.Run("map[K]*V", func(t *testing.T) {
 		v1, v2 := 10, 20
 		original := map[string]*int{"x": &v1, "y": &v2}
-		cloned, err := gw_common.CloneMapP(original)
+		cloned, err := CloneMapP(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -184,7 +182,7 @@ func TestClone_Structs(t *testing.T) {
 			B: "test",
 			C: &SubStruct{SubVal: 1234},
 		}
-		cloned, err := gw_common.Clone(original)
+		cloned, err := Clone(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -221,7 +219,7 @@ func TestClone_CycleDetection(t *testing.T) {
 		n1.Next = n2
 		n2.Next = n1 // 循環参照
 
-		_, err := gw_common.CloneP(n1)
+		_, err := CloneP(n1)
 		if err == nil {
 			t.Error("expected circular reference error, got nil")
 		} else {
@@ -240,7 +238,7 @@ func TestClone_CycleDetection(t *testing.T) {
 		s1 := &S{Name: "root"}
 		s1.Slice = []*S{s1} // 自分自身を要素に持つ -> 循環参照
 
-		_, err := gw_common.CloneP(s1)
+		_, err := CloneP(s1)
 		if err == nil {
 			t.Error("expected circular reference error, got nil")
 		} else {
@@ -254,7 +252,7 @@ func TestClone_CycleDetection(t *testing.T) {
 func TestClone_EdgeCases(t *testing.T) {
 	t.Run("nil interface", func(t *testing.T) {
 		var original interface{}
-		cloned, err := gw_common.Clone(original)
+		cloned, err := Clone(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -265,7 +263,7 @@ func TestClone_EdgeCases(t *testing.T) {
 
 	t.Run("empty slice", func(t *testing.T) {
 		original := []int{}
-		cloned, err := gw_common.CloneSlice(original)
+		cloned, err := CloneSlice(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -276,7 +274,7 @@ func TestClone_EdgeCases(t *testing.T) {
 
 	t.Run("empty map", func(t *testing.T) {
 		original := map[string]int{}
-		cloned, err := gw_common.CloneMap(original)
+		cloned, err := CloneMap(original)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -296,7 +294,7 @@ func TestClone_TypeAssertionFailure(t *testing.T) {
 	original := MyStruct{X: 123}
 
 	// ここで何らかの方法で "cloned" が MyStruct 以外の型を返すと失敗するはず。
-	cloned, err := gw_common.Clone(original)
+	cloned, err := Clone(original)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
