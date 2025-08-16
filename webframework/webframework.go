@@ -8,15 +8,18 @@ import (
 
 	"mime/multipart"
 
+	"os"
+
 	gw_errors "github.com/generalworksinc/goutil/errors"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/compress"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/compress"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/session"
+	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
-var store = session.New() // セッションのストアを初期化
+var store = session.NewStore() // v3: セッションのストア初期化は NewStore を使用
 
 type WebCookie struct {
 	Cookie interface{}
@@ -36,7 +39,7 @@ type WebRouter interface {
 type WebHandler func(*WebCtx) error
 
 func toFiberHandler(webHandler WebHandler) fiber.Handler {
-	return func(fiberCtx *fiber.Ctx) error {
+	return func(fiberCtx fiber.Ctx) error {
 		return webHandler(&WebCtx{Ctx: fiberCtx})
 	}
 }
@@ -56,20 +59,21 @@ func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 		//StrictRouting: true,
 		//ServerHeader:  "Fiber",
 		BodyLimit: 1024 * 1024 * 1024, //1 GB
-		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
+		ErrorHandler: func(ctx fiber.Ctx, err error) error {
 			return errorHandler(&WebCtx{Ctx: ctx}, err)
 		},
 	})
 	app.Use(compress.New())
 	app.Use(cors.New())
 
-	app.Use(func(c *fiber.Ctx) (err error) {
+	app.Use(func(c fiber.Ctx) (err error) {
 		// Catch panics
 		defer gw_errors.CatchPanic(&err, false) //このタイミングではエラーログをsentryに送信せず、Errorhandlerに任せる
 		// return gw_errors.Wrap(err) if exist, else move to next handlerF
 		return c.Next()
 	})
-	app.Static("/static", "static")
+	// v3: Static メソッドは削除。静的ミドルウェアに置き換え
+	app.Use(static.New("/static", static.Config{FS: os.DirFS("static")}))
 	return &WebApp{
 		App: app,
 	}
@@ -77,11 +81,9 @@ func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 
 // formatをデフォルトを使う場合、nilをセット
 func (app WebApp) SetLogger(writer io.Writer, format *string) {
-	loggerConfig := logger.Config{
-		//TimeFormat: "02-Jan-2006",
-		//TimeZone:   "America/New_York",
-		Output: writer,
-	}
+	loggerConfig := logger.Config{Stream: writer}
+	// NOTE: Fiber v3 の logger.Config は Output フィールドが廃止。出力の切り替えが必要な場合は
+	// サービスや外部ロガー連携に移行する。ここでは Format のみ反映する。
 	if format != nil {
 		loggerConfig.Format = *format
 	}
@@ -94,11 +96,19 @@ func (app WebApp) Group(prefix string, handlers ...WebHandler) WebGroup {
 	}
 }
 func (app WebApp) Get(path string, handlers ...WebHandler) {
-	app.App.(*fiber.App).Get(path, toFiberHandlers(handlers)...)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	app.App.(*fiber.App).Get(path, hs[0], hs[1:]...)
 }
 func (app WebApp) Post(path string, handlers ...WebHandler) {
 	a := app.App.(*fiber.App)
-	a.Post(path, toFiberHandlers(handlers)...)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	a.Post(path, hs[0], hs[1:]...)
 }
 func (app WebApp) Listen(addr string) error {
 	a := app.App.(*fiber.App)
@@ -119,10 +129,18 @@ func (app WebApp) Shutdown() error {
 
 // WebGroup ////////////////////////////////////////////////
 func (group WebGroup) Get(path string, handlers ...WebHandler) {
-	group.Group.(*fiber.Group).Get(path, toFiberHandlers(handlers)...)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Get(path, hs[0], hs[1:]...)
 }
 func (group WebGroup) Post(path string, handlers ...WebHandler) {
-	group.Group.(*fiber.Group).Post(path, toFiberHandlers(handlers)...)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Post(path, hs[0], hs[1:]...)
 }
 func (group WebGroup) Use(args ...interface{}) {
 	convertedArgs := []interface{}{}
@@ -150,121 +168,129 @@ func (cookie WebCookie) SetValue(val string) {
 // Session /////////////////////////////////////////////////
 
 func (ctx WebCtx) SessionSet(key string, value string) error {
-	sess, err := store.Get(ctx.Ctx.(*fiber.Ctx))
+	sess, err := store.Get(ctx.Ctx.(fiber.Ctx))
 	if err != nil {
 		return gw_errors.Wrap(err)
 	}
+	defer sess.Release()
 	sess.Set(key, value)
 	return nil
 }
 func (ctx WebCtx) SessionGet(key string) interface{} {
-	sess, err := store.Get(ctx.Ctx.(*fiber.Ctx))
+	sess, err := store.Get(ctx.Ctx.(fiber.Ctx))
 	if err != nil {
 		return nil
 	}
+	defer sess.Release()
 	return sess.Get(key)
 }
 func (ctx WebCtx) SessionSave() error {
-	sess, err := store.Get(ctx.Ctx.(*fiber.Ctx))
+	sess, err := store.Get(ctx.Ctx.(fiber.Ctx))
 	if err != nil {
 		return gw_errors.Wrap(err)
 	}
+	defer sess.Release()
 	return gw_errors.Wrap(sess.Save())
 }
 
 // Context /////////////////////////////////////////////////
 func (ctx WebCtx) Type(extension string, charset ...string) *WebCtx {
-	ctx.Ctx = ctx.Ctx.(*fiber.Ctx).Type(extension, charset...)
+	ctx.Ctx = ctx.Ctx.(fiber.Ctx).Type(extension, charset...)
 	return &ctx
 }
 func (ctx WebCtx) Send(body []byte) error {
-	return ctx.Ctx.(*fiber.Ctx).Send(body)
+	return ctx.Ctx.(fiber.Ctx).Send(body)
 }
 func (ctx WebCtx) SendString(bodyStr string) error {
-	return ctx.Ctx.(*fiber.Ctx).SendString(bodyStr)
+	return ctx.Ctx.(fiber.Ctx).SendString(bodyStr)
 }
 func (ctx WebCtx) Set(key string, val string) {
-	ctx.Ctx.(*fiber.Ctx).Set(key, val)
+	ctx.Ctx.(fiber.Ctx).Set(key, val)
 }
 func (ctx WebCtx) Redirect(location string, status ...int) error {
-	return ctx.Ctx.(*fiber.Ctx).Redirect(location, status...)
+	r := ctx.Ctx.(fiber.Ctx).Redirect()
+	if len(status) > 0 {
+		r = r.Status(status[0])
+	}
+	return r.To(location)
 }
 func (ctx WebCtx) Cookie(cookie *WebCookie) {
-	ctx.Ctx.(*fiber.Ctx).Cookie(cookie.Cookie.(*fiber.Cookie))
+	ctx.Ctx.(fiber.Ctx).Cookie(cookie.Cookie.(*fiber.Cookie))
 }
 func (ctx WebCtx) Query(key string, defaultValue ...string) string {
-	return ctx.Ctx.(*fiber.Ctx).Query(key, defaultValue...)
+	return ctx.Ctx.(fiber.Ctx).Query(key, defaultValue...)
 }
 func (ctx WebCtx) Params(key string, defaultValue ...string) string {
-	return ctx.Ctx.(*fiber.Ctx).Params(key, defaultValue...)
+	return ctx.Ctx.(fiber.Ctx).Params(key, defaultValue...)
 }
 func (ctx WebCtx) Locals(key interface{}, value ...interface{}) interface{} {
-	return ctx.Ctx.(*fiber.Ctx).Locals(key, value...)
+	return ctx.Ctx.(fiber.Ctx).Locals(key, value...)
 }
 func (ctx WebCtx) Next() error {
-	return ctx.Ctx.(*fiber.Ctx).Next()
+	return ctx.Ctx.(fiber.Ctx).Next()
 }
 
 func (ctx WebCtx) QueryParser(out interface{}) error {
-	return ctx.Ctx.(*fiber.Ctx).QueryParser(out)
+	return ctx.Ctx.(fiber.Ctx).Bind().Query(out)
 }
 func (ctx WebCtx) BodyParser(out interface{}) error {
-	return ctx.Ctx.(*fiber.Ctx).BodyParser(out)
+	return ctx.Ctx.(fiber.Ctx).Bind().Body(out)
 }
 
 func (ctx WebCtx) FormFile(key string) (*multipart.FileHeader, error) {
-	return ctx.Ctx.(*fiber.Ctx).FormFile(key)
+	return ctx.Ctx.(fiber.Ctx).FormFile(key)
 }
 func (ctx WebCtx) FormValue(key string, defaultValue ...string) string {
-	return ctx.Ctx.(*fiber.Ctx).FormValue(key, defaultValue...)
+	return ctx.Ctx.(fiber.Ctx).FormValue(key, defaultValue...)
 }
 
 func (ctx WebCtx) Get(key string, defaultValue ...string) string {
-	return ctx.Ctx.(*fiber.Ctx).Get(key, defaultValue...)
+	return ctx.Ctx.(fiber.Ctx).Get(key, defaultValue...)
 }
 
 func (ctx WebCtx) JSON(data interface{}) error {
-	return ctx.Ctx.(*fiber.Ctx).JSON(data)
+	return ctx.Ctx.(fiber.Ctx).JSON(data)
 }
 func (ctx WebCtx) Cookies(key string, defaultValue ...string) string {
-	return ctx.Ctx.(*fiber.Ctx).Cookies(key, defaultValue...)
+	return ctx.Ctx.(fiber.Ctx).Cookies(key, defaultValue...)
 }
 func (ctx WebCtx) StatusCode() int {
-	return ctx.Ctx.(*fiber.Ctx).Response().StatusCode()
+	return ctx.Ctx.(fiber.Ctx).Response().StatusCode()
 }
 func (ctx WebCtx) Status(status int) WebCtx {
-	ctx.Ctx.(*fiber.Ctx).Status(status)
+	ctx.Ctx.(fiber.Ctx).Status(status)
 	return ctx
 }
 func (ctx WebCtx) BaseURL() string {
-	return ctx.Ctx.(*fiber.Ctx).BaseURL()
+	return ctx.Ctx.(fiber.Ctx).BaseURL()
 }
 func (ctx WebCtx) OriginalURL() string {
-	return ctx.Ctx.(*fiber.Ctx).OriginalURL()
+	return ctx.Ctx.(fiber.Ctx).OriginalURL()
 }
 func (ctx WebCtx) Method(override ...string) string {
-	return ctx.Ctx.(*fiber.Ctx).Method(override...)
+	return ctx.Ctx.(fiber.Ctx).Method(override...)
 }
 func (ctx WebCtx) Protocol() string {
-	return ctx.Ctx.(*fiber.Ctx).Protocol()
+	return ctx.Ctx.(fiber.Ctx).Protocol()
 }
 func (ctx WebCtx) IP() string {
-	return ctx.Ctx.(*fiber.Ctx).IP()
+	return ctx.Ctx.(fiber.Ctx).IP()
 }
 func (ctx WebCtx) UserAgent() string {
-	return string(ctx.Ctx.(*fiber.Ctx).Context().UserAgent())
+	// return string(ctx.Ctx.(fiber.Ctx).RequestCtx().Request.Header.UserAgent())
+	return ctx.Ctx.(fiber.Ctx).Get(fiber.HeaderUserAgent)
 }
 func (ctx WebCtx) SetHeader(key string, val string) {
-	ctx.Ctx.(*fiber.Ctx).Set(key, val)
+	ctx.Ctx.(fiber.Ctx).Set(key, val)
 }
 func (ctx WebCtx) Body() []byte {
-	return ctx.Ctx.(*fiber.Ctx).Body()
+	return ctx.Ctx.(fiber.Ctx).Body()
 }
 func (ctx WebCtx) SendStream(stream io.Reader, size ...int) error {
-	return ctx.Ctx.(*fiber.Ctx).SendStream(stream, size...)
+	return ctx.Ctx.(fiber.Ctx).SendStream(stream, size...)
 }
 func (ctx WebCtx) BodyWriter() io.Writer {
-	return ctx.Ctx.(*fiber.Ctx).Context().Response.BodyWriter()
+	return ctx.Ctx.(fiber.Ctx).Response().BodyWriter()
 }
 
 // HTTP Headers were copied from net/http.

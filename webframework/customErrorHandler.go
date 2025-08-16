@@ -11,7 +11,7 @@ import (
 	gw_errors "github.com/generalworksinc/goutil/errors"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"golang.org/x/exp/utf8string"
 )
 
