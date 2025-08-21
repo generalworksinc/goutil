@@ -100,8 +100,9 @@ func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 					log.Printf("Failed to send error to Sentry: %v", r)
 				}
 			}()
+			msg := "error capture. message:" + fmt.Sprintf("%v", err) + "\n\n" + strings.Join(errorMessageList, "\n")
 			log.Println("sentry.CaptureMessage on errorLog start!")
-			sentry.CaptureMessage(strings.Join(errorMessageList, "\n"))
+			sentry.CaptureMessage(msg)
 			log.Println("sentry.CaptureMessage on errorLog end!")
 		}()
 		err = LoggerSentFlagOn(err)
