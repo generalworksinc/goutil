@@ -58,6 +58,7 @@ func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 		//CaseSensitive: true,
 		//StrictRouting: true,
 		//ServerHeader:  "Fiber",
+		Immutable: true,               //安全側に倒す
 		BodyLimit: 1024 * 1024 * 1024, //1 GB
 		ErrorHandler: func(ctx fiber.Ctx, err error) error {
 			return errorHandler(&WebCtx{Ctx: ctx}, err)
