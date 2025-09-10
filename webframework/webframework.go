@@ -167,6 +167,27 @@ func (group WebGroup) Post(path string, handlers ...WebHandler) {
 	}
 	group.Group.(*fiber.Group).Post(path, hs[0], hs[1:]...)
 }
+func (group WebGroup) Put(path string, handlers ...WebHandler) {
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Put(path, hs[0], hs[1:]...)
+}
+func (group WebGroup) Patch(path string, handlers ...WebHandler) {
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Patch(path, hs[0], hs[1:]...)
+}
+func (group WebGroup) Delete(path string, handlers ...WebHandler) {
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Delete(path, hs[0], hs[1:]...)
+}
 func (group WebGroup) Use(args ...interface{}) {
 	convertedArgs := []interface{}{}
 	for _, arg := range args {
