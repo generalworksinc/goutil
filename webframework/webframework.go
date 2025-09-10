@@ -111,6 +111,30 @@ func (app WebApp) Post(path string, handlers ...WebHandler) {
 	}
 	a.Post(path, hs[0], hs[1:]...)
 }
+func (app WebApp) Put(path string, handlers ...WebHandler) {
+	a := app.App.(*fiber.App)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	a.Put(path, hs[0], hs[1:]...)
+}
+func (app WebApp) Patch(path string, handlers ...WebHandler) {
+	a := app.App.(*fiber.App)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	a.Patch(path, hs[0], hs[1:]...)
+}
+func (app WebApp) Delete(path string, handlers ...WebHandler) {
+	a := app.App.(*fiber.App)
+	hs := toFiberHandlers(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	a.Delete(path, hs[0], hs[1:]...)
+}
 func (app WebApp) Listen(addr string) error {
 	a := app.App.(*fiber.App)
 	return a.Listen(addr)
