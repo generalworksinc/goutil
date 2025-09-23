@@ -562,9 +562,10 @@ func (conn *WebSocketConn) PongHandler() func(appData string) error {
 func (conn *WebSocketConn) Subprotocol() string {
 	return conn.Subprotocol()
 }
-func (conn *WebSocketConn) WritePreparedMessage(pm *websocket.PreparedMessage) error {
-	return conn.WritePreparedMessage(pm)
-}
+
+//	func (conn *WebSocketConn) WritePreparedMessage(pm *websocket.PreparedMessage) error {
+//		return conn.WritePreparedMessage(pm)
+//	}
 func (conn *WebSocketConn) Read(p []byte) (n int, err error) {
 	return conn.Read(p)
 }
