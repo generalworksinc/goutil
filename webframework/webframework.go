@@ -36,7 +36,7 @@ type WebRouter interface {
 	Get(key string, defaultValue ...string) string
 }
 type WebHandler func(*WebCtx) error
-type WsHandler func(*WebSocketConn) error
+type WsHandler func(*WebSocketConn)
 
 func toFiberHandler(webHandler WebHandler) fiber.Handler {
 	return func(fiberCtx *fiber.Ctx) error {
@@ -53,8 +53,7 @@ func toFiberHandlers(webHandlerList []WebHandler) []fiber.Handler {
 
 func toFiberHandlerFromWs(wsHandler WsHandler) fiber.Handler {
 	return websocket.New(func(conn *websocket.Conn) {
-		err := wsHandler(&WebSocketConn{Conn: conn})
-		gw_errors.PrintError(err)
+		wsHandler(&WebSocketConn{Conn: conn})
 	})
 }
 func toFiberHandlersFromWs(webHandlerList []WsHandler) []fiber.Handler {
