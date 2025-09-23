@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"time"
 
 	"mime/multipart"
@@ -485,90 +484,96 @@ type WebSocketConn struct {
 }
 
 func (conn *WebSocketConn) ReadMessage() (messageType int, p []byte, err error) {
-	return conn.ReadMessage()
+	return conn.Conn.ReadMessage()
 }
 func (conn *WebSocketConn) WriteMessage(messageType int, data []byte) error {
-	return conn.WriteMessage(messageType, data)
+	return conn.Conn.WriteMessage(messageType, data)
 }
 func (conn *WebSocketConn) Close() error {
-	return conn.Close()
+	return conn.Conn.Close()
 }
 func (conn *WebSocketConn) NextReader() (messageType int, r io.Reader, err error) {
-	return conn.NextReader()
+	return conn.Conn.NextReader()
 }
 func (conn *WebSocketConn) NextWriter(messageType int) (io.WriteCloser, error) {
-	return conn.NextWriter(messageType)
+	return conn.Conn.NextWriter(messageType)
 }
-func (conn *WebSocketConn) Ping(payload []byte) error {
-	return conn.Ping(payload)
-}
-func (conn *WebSocketConn) Pong(payload []byte) error {
-	return conn.Pong(payload)
-}
+
+//	func (conn *WebSocketConn) Ping(payload []byte) error {
+//		return conn.Conn.Ping(payload)
+//	}
+//
+//	func (conn *WebSocketConn) Pong(payload []byte) error {
+//		return conn.Conn.Pong(payload)
+//	}
 func (conn *WebSocketConn) RemoteAddr() net.Addr {
-	return conn.RemoteAddr()
+	return conn.Conn.RemoteAddr()
 }
 func (conn *WebSocketConn) LocalAddr() net.Addr {
-	return conn.LocalAddr()
+	return conn.Conn.LocalAddr()
 }
 func (conn *WebSocketConn) SetReadDeadline(t time.Time) error {
-	return conn.SetReadDeadline(t)
+	return conn.Conn.SetReadDeadline(t)
 }
 func (conn *WebSocketConn) SetWriteDeadline(t time.Time) error {
-	return conn.SetWriteDeadline(t)
+	return conn.Conn.SetWriteDeadline(t)
 }
 func (conn *WebSocketConn) SetPongHandler(handler func(appData string) error) {
-	conn.SetPongHandler(handler)
+	conn.Conn.Conn.SetPongHandler(handler)
 }
 func (conn *WebSocketConn) SetPingHandler(handler func(appData string) error) {
-	conn.SetPingHandler(handler)
+	conn.Conn.Conn.SetPingHandler(handler)
 }
 func (conn *WebSocketConn) SetCloseHandler(handler func(code int, text string) error) {
-	conn.SetCloseHandler(handler)
+	conn.Conn.Conn.SetCloseHandler(handler)
 }
-func (conn *WebSocketConn) Config() *websocket.Config {
-	return conn.Config()
-}
-func (conn *WebSocketConn) Request() *http.Request {
-	return conn.Request()
-}
-func (conn *WebSocketConn) IsClientConn() bool {
-	return conn.IsClientConn()
-}
-func (conn *WebSocketConn) IsServerConn() bool {
-	return conn.IsServerConn()
-}
+
+//	func (conn *WebSocketConn) Config() *websocket.Config {
+//		return conn.Conn.Config()
+//	}
+//
+//	func (conn *WebSocketConn) Request() *http.Request {
+//		return conn.Conn.Request()
+//	}
+//
+//	func (conn *WebSocketConn) IsClientConn() bool {
+//		return conn.Conn.IsClientConn()
+//	}
+//
+//	func (conn *WebSocketConn) IsServerConn() bool {
+//		return conn.Conn.IsServerConn()
+//	}
 func (conn *WebSocketConn) NetConn() net.Conn {
-	return conn.NetConn()
+	return conn.Conn.NetConn()
 }
 func (conn *WebSocketConn) UnderlyingConn() net.Conn {
-	return conn.UnderlyingConn()
+	return conn.Conn.UnderlyingConn()
 }
 func (conn *WebSocketConn) EnableWriteCompression(enable bool) {
-	conn.EnableWriteCompression(enable)
+	conn.Conn.EnableWriteCompression(enable)
 }
 func (conn *WebSocketConn) SetCompressionLevel(level int) {
-	conn.SetCompressionLevel(level)
+	conn.Conn.SetCompressionLevel(level)
 }
 func (conn *WebSocketConn) CloseHandler() func(code int, text string) error {
-	return conn.CloseHandler()
+	return conn.Conn.CloseHandler()
 }
 func (conn *WebSocketConn) PingHandler() func(appData string) error {
-	return conn.PingHandler()
+	return conn.Conn.PingHandler()
 }
 func (conn *WebSocketConn) PongHandler() func(appData string) error {
-	return conn.PongHandler()
+	return conn.Conn.PongHandler()
 }
 func (conn *WebSocketConn) Subprotocol() string {
-	return conn.Subprotocol()
+	return conn.Conn.Subprotocol()
 }
 
 //	func (conn *WebSocketConn) WritePreparedMessage(pm *websocket.PreparedMessage) error {
-//		return conn.WritePreparedMessage(pm)
+//		return conn.Conn.WritePreparedMessage(pm)
 //	}
-func (conn *WebSocketConn) Read(p []byte) (n int, err error) {
-	return conn.Read(p)
-}
-func (conn *WebSocketConn) Write(p []byte) (n int, err error) {
-	return conn.Write(p)
-}
+// func (conn *WebSocketConn) Read(p []byte) (n int, err error) {
+// 	return conn.Conn.Read(p)
+// }
+// func (conn *WebSocketConn) Write(p []byte) (n int, err error) {
+// 	return conn.Conn.Write(p)
+// }
