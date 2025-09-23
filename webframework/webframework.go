@@ -4,11 +4,14 @@ import (
 	"context"
 	"io"
 	"log"
+	"net"
+	"net/http"
 	"time"
 
 	"mime/multipart"
 
 	gw_errors "github.com/generalworksinc/goutil/errors"
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -34,6 +37,7 @@ type WebRouter interface {
 	Get(key string, defaultValue ...string) string
 }
 type WebHandler func(*WebCtx) error
+type WsHandler func(*WebSocketConn) error
 
 func toFiberHandler(webHandler WebHandler) fiber.Handler {
 	return func(fiberCtx *fiber.Ctx) error {
@@ -44,6 +48,20 @@ func toFiberHandlers(webHandlerList []WebHandler) []fiber.Handler {
 	hList := []fiber.Handler{}
 	for _, handler := range webHandlerList {
 		hList = append(hList, toFiberHandler(handler))
+	}
+	return hList
+}
+
+func toFiberHandlerFromWs(wsHandler WsHandler) fiber.Handler {
+	return websocket.New(func(conn *websocket.Conn) {
+		err := wsHandler(&WebSocketConn{Conn: conn})
+		gw_errors.PrintError(err)
+	})
+}
+func toFiberHandlersFromWs(webHandlerList []WsHandler) []fiber.Handler {
+	hList := []fiber.Handler{}
+	for _, handler := range webHandlerList {
+		hList = append(hList, toFiberHandlerFromWs(handler))
 	}
 	return hList
 }
@@ -99,6 +117,14 @@ func (app WebApp) Get(path string, handlers ...WebHandler) {
 func (app WebApp) Post(path string, handlers ...WebHandler) {
 	a := app.App.(*fiber.App)
 	a.Post(path, toFiberHandlers(handlers)...)
+}
+func (app WebApp) WsGet(path string, handlers ...WsHandler) {
+	a := app.App.(*fiber.App)
+	hs := toFiberHandlersFromWs(handlers)
+	if len(hs) == 0 {
+		return
+	}
+	a.Get(path, hs...)
 }
 func (app WebApp) Listen(addr string) error {
 	a := app.App.(*fiber.App)
@@ -452,3 +478,96 @@ const (
 	MIMEApplicationJSONCharsetUTF8       = "application/json; charset=utf-8"
 	MIMEApplicationJavaScriptCharsetUTF8 = "application/javascript; charset=utf-8"
 )
+
+// gofiber Websocketのラッパー
+type WebSocketConn struct {
+	Conn *websocket.Conn
+}
+
+func (conn *WebSocketConn) ReadMessage() (messageType int, p []byte, err error) {
+	return conn.ReadMessage()
+}
+func (conn *WebSocketConn) WriteMessage(messageType int, data []byte) error {
+	return conn.WriteMessage(messageType, data)
+}
+func (conn *WebSocketConn) Close() error {
+	return conn.Close()
+}
+func (conn *WebSocketConn) NextReader() (messageType int, r io.Reader, err error) {
+	return conn.NextReader()
+}
+func (conn *WebSocketConn) NextWriter(messageType int) (io.WriteCloser, error) {
+	return conn.NextWriter(messageType)
+}
+func (conn *WebSocketConn) Ping(payload []byte) error {
+	return conn.Ping(payload)
+}
+func (conn *WebSocketConn) Pong(payload []byte) error {
+	return conn.Pong(payload)
+}
+func (conn *WebSocketConn) RemoteAddr() net.Addr {
+	return conn.RemoteAddr()
+}
+func (conn *WebSocketConn) LocalAddr() net.Addr {
+	return conn.LocalAddr()
+}
+func (conn *WebSocketConn) SetReadDeadline(t time.Time) error {
+	return conn.SetReadDeadline(t)
+}
+func (conn *WebSocketConn) SetWriteDeadline(t time.Time) error {
+	return conn.SetWriteDeadline(t)
+}
+func (conn *WebSocketConn) SetPongHandler(handler func(appData string) error) {
+	conn.SetPongHandler(handler)
+}
+func (conn *WebSocketConn) SetPingHandler(handler func(appData string) error) {
+	conn.SetPingHandler(handler)
+}
+func (conn *WebSocketConn) SetCloseHandler(handler func(code int, text string) error) {
+	conn.SetCloseHandler(handler)
+}
+func (conn *WebSocketConn) Config() *websocket.Config {
+	return conn.Config()
+}
+func (conn *WebSocketConn) Request() *http.Request {
+	return conn.Request()
+}
+func (conn *WebSocketConn) IsClientConn() bool {
+	return conn.IsClientConn()
+}
+func (conn *WebSocketConn) IsServerConn() bool {
+	return conn.IsServerConn()
+}
+func (conn *WebSocketConn) NetConn() net.Conn {
+	return conn.NetConn()
+}
+func (conn *WebSocketConn) UnderlyingConn() net.Conn {
+	return conn.UnderlyingConn()
+}
+func (conn *WebSocketConn) EnableWriteCompression(enable bool) {
+	conn.EnableWriteCompression(enable)
+}
+func (conn *WebSocketConn) SetCompressionLevel(level int) {
+	conn.SetCompressionLevel(level)
+}
+func (conn *WebSocketConn) CloseHandler() func(code int, text string) error {
+	return conn.CloseHandler()
+}
+func (conn *WebSocketConn) PingHandler() func(appData string) error {
+	return conn.PingHandler()
+}
+func (conn *WebSocketConn) PongHandler() func(appData string) error {
+	return conn.PongHandler()
+}
+func (conn *WebSocketConn) Subprotocol() string {
+	return conn.Subprotocol()
+}
+func (conn *WebSocketConn) WritePreparedMessage(pm *websocket.PreparedMessage) error {
+	return conn.WritePreparedMessage(pm)
+}
+func (conn *WebSocketConn) Read(p []byte) (n int, err error) {
+	return conn.Read(p)
+}
+func (conn *WebSocketConn) Write(p []byte) (n int, err error) {
+	return conn.Write(p)
+}
