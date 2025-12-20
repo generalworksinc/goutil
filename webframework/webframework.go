@@ -43,8 +43,8 @@ func toFiberHandler(webHandler WebHandler) fiber.Handler {
 		return webHandler(&WebCtx{Ctx: fiberCtx})
 	}
 }
-func toFiberHandlers(webHandlerList []WebHandler) []fiber.Handler {
-	hList := []fiber.Handler{}
+func toFiberHandlers(webHandlerList []WebHandler) []any {
+	hList := []any{}
 	for _, handler := range webHandlerList {
 		hList = append(hList, toFiberHandler(handler))
 	}
