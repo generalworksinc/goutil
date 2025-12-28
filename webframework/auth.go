@@ -35,16 +35,18 @@ func CreateAccessToken(hexString string, id string, exp *time.Duration) (string,
 	token.Set("Id", id)
 	now := time.Now()
 	token.SetIssuedAt(now)
+	var expireTime time.Time
 	// token.SetNotBefore(now)
 	// 必要に応じて有効期限を調整（ここでは30日）
 	if exp != nil {
-		token.SetExpiration(now.Add(*exp))
+		expireTime = now.Add(*exp)
 	} else {
-		token.SetExpiration(now.Add(30 * 24 * time.Hour))
+		expireTime = now.Add(30 * 24 * time.Hour)
 	}
+	token.SetExpiration(expireTime)
 
 	encrypted := token.V4Encrypt(key, nil) // no implicit assertion
-	return encrypted, exp, nil
+	return encrypted, &expireTime, nil
 }
 
 // VerifyData decrypts and validates a v4.local token, returning the parsed token.
