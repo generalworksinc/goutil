@@ -1,10 +1,11 @@
+package gw_web
 
 import (
 	"sync"
 	"time"
 
 	"aidanwoods.dev/go-paseto"
-	"github.com/generalworks/scheduler_api/constant"
+	gw_errors "github.com/generalworksinc/goutil/errors"
 )
 
 var (
@@ -21,8 +22,8 @@ func loadV4Key(hexString string) (paseto.V4SymmetricKey, error) {
 }
 
 // CreateToken creates a v4.local (symmetric) token with the user Id claim.
-func CreateToken(id string) (string, error) {
-	key, err := loadV4Key()
+func CreateToken(hexString string, id string, exp *time.Duration) (string, error) {
+	key, err := loadV4Key(hexString)
 	if err != nil {
 		return "", gw_errors.Wrap(err)
 	}
@@ -31,17 +32,21 @@ func CreateToken(id string) (string, error) {
 	token.Set("Id", id)
 	now := time.Now()
 	token.SetIssuedAt(now)
-	token.SetNotBefore(now)
+	// token.SetNotBefore(now)
 	// 必要に応じて有効期限を調整（ここでは30日）
-	token.SetExpiration(now.Add(30 * 24 * time.Hour))
+	if exp != nil {
+		token.SetExpiration(now.Add(*exp))
+	} else {
+		token.SetExpiration(now.Add(30 * 24 * time.Hour))
+	}
 
 	encrypted := token.V4Encrypt(key, nil) // no implicit assertion
 	return encrypted, nil
 }
 
 // VerifyData decrypts and validates a v4.local token, returning the parsed token.
-func VerifyData(tokenStr string) (*paseto.Token, error) {
-	key, err := loadV4Key()
+func VerifyData(hexString string, tokenStr string) (*paseto.Token, error) {
+	key, err := loadV4Key(hexString)
 	if err != nil {
 		return nil, gw_errors.Wrap(err)
 	}
