@@ -143,6 +143,9 @@ func CallStackOf(err error) (stackTrace string, ok bool) {
 		return "", false
 	}
 }
+func WrapResult[T any](ret T, err error) (T, error) {
+	return ret, Wrap(err)
+}
 func Wrap(err error, objList ...interface{}) error {
 	if err == nil {
 		return err
