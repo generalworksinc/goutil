@@ -1,6 +1,9 @@
 package gw_web
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 
@@ -57,4 +60,21 @@ func VerifyData(hexString string, tokenStr string) (*paseto.Token, error) {
 		return nil, gw_errors.Wrap(err)
 	}
 	return parsed, nil
+}
+
+// CreateRefreshToken returns a random token string and expiry.
+func CreateRefreshToken(ttl time.Duration) (string, time.Time, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", time.Time{}, gw_errors.Wrap(err)
+	}
+	token := hex.EncodeToString(b)
+	exp := time.Now().Add(ttl)
+	return token, exp, nil
+}
+
+// HashToken creates a hex string hash (SHA-256) for storage.
+func HashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }
