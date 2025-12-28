@@ -25,7 +25,7 @@ func loadV4Key(hexString string) (paseto.V4SymmetricKey, error) {
 }
 
 // CreateToken creates a v4.local (symmetric) token with the user Id claim.
-func CreateToken(hexString string, id string, exp *time.Duration) (string, error) {
+func CreateAccessToken(hexString string, id string, exp *time.Duration) (string, error) {
 	key, err := loadV4Key(hexString)
 	if err != nil {
 		return "", gw_errors.Wrap(err)
