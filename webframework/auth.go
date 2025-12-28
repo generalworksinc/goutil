@@ -25,10 +25,10 @@ func loadV4Key(hexString string) (paseto.V4SymmetricKey, error) {
 }
 
 // CreateToken creates a v4.local (symmetric) token with the user Id claim.
-func CreateAccessToken(hexString string, id string, exp *time.Duration) (string, error) {
+func CreateAccessToken(hexString string, id string, exp *time.Duration) (string, *time.Time, error) {
 	key, err := loadV4Key(hexString)
 	if err != nil {
-		return "", gw_errors.Wrap(err)
+		return "", nil, gw_errors.Wrap(err)
 	}
 
 	token := paseto.NewToken()
@@ -44,7 +44,7 @@ func CreateAccessToken(hexString string, id string, exp *time.Duration) (string,
 	}
 
 	encrypted := token.V4Encrypt(key, nil) // no implicit assertion
-	return encrypted, nil
+	return encrypted, exp, nil
 }
 
 // VerifyData decrypts and validates a v4.local token, returning the parsed token.
