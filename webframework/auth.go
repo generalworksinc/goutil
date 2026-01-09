@@ -99,7 +99,7 @@ type RefreshTokenCookieOptions struct {
 	MaxAgeSeconds *int
 }
 
-func setRefreshTokenCookie(c *WebCtx, token string, expiresAt time.Time, opt *RefreshTokenCookieOptions) {
+func SetRefreshTokenCookie(c *WebCtx, token string, expiresAt time.Time, opt *RefreshTokenCookieOptions) {
 	ck := &WebCookie{Cookie: &fiber.Cookie{}}
 	fc := ck.Cookie.(*fiber.Cookie)
 
