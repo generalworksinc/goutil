@@ -9,6 +9,7 @@ import (
 
 	"aidanwoods.dev/go-paseto"
 	gw_errors "github.com/generalworksinc/goutil/errors"
+	"github.com/gofiber/fiber/v3"
 )
 
 var (
@@ -79,4 +80,73 @@ func CreateRefreshToken(ttl time.Duration) (string, time.Time, error) {
 func HashToken(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
+}
+
+type RefreshTokenCookieOptions struct {
+	// Name defaults to "refresh_token"
+	Name string
+	// Path defaults to "/api"
+	Path string
+	// Domain defaults to empty (host-only cookie)
+	Domain string
+	// SameSite defaults to "Lax"
+	SameSite string
+	// HTTPOnly defaults to true
+	HTTPOnly *bool
+	// Secure defaults to false if nil. (prod などで true にしたい場合は明示的に渡す)
+	Secure *bool
+	// MaxAgeSeconds overrides computed MaxAge. If nil, MaxAge is computed from expiresAt.
+	MaxAgeSeconds *int
+}
+
+func setRefreshTokenCookie(c *WebCtx, token string, expiresAt time.Time, opt *RefreshTokenCookieOptions) {
+	ck := &WebCookie{Cookie: &fiber.Cookie{}}
+	fc := ck.Cookie.(*fiber.Cookie)
+
+	name := "refresh_token"
+	path := "/api"
+	domain := ""
+	sameSite := "Lax"
+	httpOnly := true
+	if opt != nil {
+		if opt.Name != "" {
+			name = opt.Name
+		}
+		if opt.Path != "" {
+			path = opt.Path
+		}
+		if opt.Domain != "" {
+			domain = opt.Domain
+		}
+		if opt.SameSite != "" {
+			sameSite = opt.SameSite
+		}
+		if opt.HTTPOnly != nil {
+			httpOnly = *opt.HTTPOnly
+		}
+	}
+
+	fc.Name = name
+	fc.Value = token
+	fc.Path = path
+	fc.Domain = domain
+	fc.HTTPOnly = httpOnly
+	fc.SameSite = sameSite
+	fc.Expires = expiresAt
+
+	// MaxAge は秒指定。期限が過去なら削除扱い。
+	maxAge := int(time.Until(expiresAt).Seconds())
+	if opt != nil && opt.MaxAgeSeconds != nil {
+		maxAge = *opt.MaxAgeSeconds
+	}
+	if token == "" {
+		maxAge = -1
+		fc.Expires = time.Unix(0, 0)
+	}
+	fc.MaxAge = maxAge
+
+	if opt != nil && opt.Secure != nil {
+		fc.Secure = *opt.Secure
+	}
+	c.Cookie(ck)
 }
