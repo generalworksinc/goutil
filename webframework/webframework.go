@@ -86,7 +86,7 @@ func toFiberHandlersFromWs(webHandlerList []WsHandler, cfg *WebSocketConfig) []a
 
 // Application /////////////////////////////////////////////
 func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
-	app := fiber.New(fiber.Config{
+	fiberCfg := fiber.Config{
 		//Prefork:       true,
 		//CaseSensitive: true,
 		//StrictRouting: true,
@@ -96,7 +96,9 @@ func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 		ErrorHandler: func(ctx fiber.Ctx, err error) error {
 			return errorHandler(&WebCtx{Ctx: ctx}, err)
 		},
-	})
+	}
+
+	app := fiber.New(fiberCfg)
 	app.Use(compress.New())
 	app.Use(cors.New())
 
@@ -326,8 +328,20 @@ func (ctx WebCtx) Next() error {
 func (ctx WebCtx) QueryParser(out interface{}) error {
 	return ctx.Ctx.(fiber.Ctx).Bind().Query(out)
 }
+
+// Deprecated: Use BindJSON/BindForm/BindQuery.
 func (ctx WebCtx) BodyParser(out interface{}) error {
 	return ctx.Ctx.(fiber.Ctx).Bind().Body(out)
+}
+
+func (ctx WebCtx) BindJSON(out interface{}) error {
+	return ctx.Ctx.(fiber.Ctx).Bind().JSON(out)
+}
+func (ctx WebCtx) BindForm(out interface{}) error {
+	return ctx.Ctx.(fiber.Ctx).Bind().Form(out)
+}
+func (ctx WebCtx) BindQuery(out interface{}) error {
+	return ctx.Ctx.(fiber.Ctx).Bind().Query(out)
 }
 
 func (ctx WebCtx) FormFile(key string) (*multipart.FileHeader, error) {
