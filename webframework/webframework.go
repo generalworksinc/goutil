@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"net"
 	"time"
 
 	"mime/multipart"
@@ -11,6 +12,7 @@ import (
 	"os"
 
 	gw_errors "github.com/generalworksinc/goutil/errors"
+	"github.com/gofiber/contrib/v3/websocket"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -37,6 +39,18 @@ type WebRouter interface {
 	Get(key string, defaultValue ...string) string
 }
 type WebHandler func(*WebCtx) error
+type WsHandler func(*WebSocketConn)
+
+type WebSocketConfig struct {
+	Next              func(*WebCtx) bool
+	HandshakeTimeout  time.Duration
+	Subprotocols      []string
+	Origins           []string
+	ReadBufferSize    int
+	WriteBufferSize   int
+	EnableCompression bool
+	RecoverHandler    func(*WebSocketConn)
+}
 
 func toFiberHandler(webHandler WebHandler) fiber.Handler {
 	return func(fiberCtx fiber.Ctx) error {
@@ -47,6 +61,25 @@ func toFiberHandlers(webHandlerList []WebHandler) []any {
 	hList := []any{}
 	for _, handler := range webHandlerList {
 		hList = append(hList, toFiberHandler(handler))
+	}
+	return hList
+}
+
+func toFiberHandlerFromWs(wsHandler WsHandler, cfg *WebSocketConfig) fiber.Handler {
+	handler := func(conn *websocket.Conn) {
+		wsHandler(&WebSocketConn{Conn: conn})
+	}
+	if cfg == nil {
+		return websocket.New(handler)
+	}
+	fiberCfg := cfg.toFiberConfig()
+	return websocket.New(handler, fiberCfg)
+}
+
+func toFiberHandlersFromWs(webHandlerList []WsHandler, cfg *WebSocketConfig) []any {
+	hList := []any{}
+	for _, handler := range webHandlerList {
+		hList = append(hList, toFiberHandlerFromWs(handler, cfg))
 	}
 	return hList
 }
@@ -134,6 +167,20 @@ func (app WebApp) Delete(path string, handlers ...WebHandler) {
 		return
 	}
 	a.Delete(path, hs[0], hs[1:]...)
+}
+func (app WebApp) WsGet(path string, handlers ...WsHandler) {
+	hs := toFiberHandlersFromWs(handlers, nil)
+	if len(hs) == 0 {
+		return
+	}
+	app.App.(*fiber.App).Get(path, hs[0], hs[1:]...)
+}
+func (app WebApp) WsGetWithConfig(path string, cfg WebSocketConfig, handlers ...WsHandler) {
+	hs := toFiberHandlersFromWs(handlers, &cfg)
+	if len(hs) == 0 {
+		return
+	}
+	app.App.(*fiber.App).Get(path, hs[0], hs[1:]...)
 }
 func (app WebApp) Listen(addr string) error {
 	a := app.App.(*fiber.App)
@@ -337,6 +384,112 @@ func (ctx WebCtx) SendStream(stream io.Reader, size ...int) error {
 }
 func (ctx WebCtx) BodyWriter() io.Writer {
 	return ctx.Ctx.(fiber.Ctx).Response().BodyWriter()
+}
+
+// WebSocket //////////////////////////////////////////////////
+type WebSocketConn struct {
+	Conn *websocket.Conn
+}
+
+func (conn *WebSocketConn) ReadMessage() (messageType int, p []byte, err error) {
+	return conn.Conn.ReadMessage()
+}
+func (conn *WebSocketConn) WriteMessage(messageType int, data []byte) error {
+	return conn.Conn.WriteMessage(messageType, data)
+}
+func (conn *WebSocketConn) Close() error {
+	return conn.Conn.Close()
+}
+func (conn *WebSocketConn) NextReader() (messageType int, r io.Reader, err error) {
+	return conn.Conn.NextReader()
+}
+func (conn *WebSocketConn) NextWriter(messageType int) (io.WriteCloser, error) {
+	return conn.Conn.NextWriter(messageType)
+}
+func (conn *WebSocketConn) RemoteAddr() net.Addr {
+	return conn.Conn.RemoteAddr()
+}
+func (conn *WebSocketConn) LocalAddr() net.Addr {
+	return conn.Conn.LocalAddr()
+}
+func (conn *WebSocketConn) SetReadDeadline(t time.Time) error {
+	return conn.Conn.SetReadDeadline(t)
+}
+func (conn *WebSocketConn) SetWriteDeadline(t time.Time) error {
+	return conn.Conn.SetWriteDeadline(t)
+}
+func (conn *WebSocketConn) SetPongHandler(handler func(appData string) error) {
+	conn.Conn.SetPongHandler(handler)
+}
+func (conn *WebSocketConn) SetPingHandler(handler func(appData string) error) {
+	conn.Conn.SetPingHandler(handler)
+}
+func (conn *WebSocketConn) SetCloseHandler(handler func(code int, text string) error) {
+	conn.Conn.SetCloseHandler(handler)
+}
+func (conn *WebSocketConn) NetConn() net.Conn {
+	return conn.Conn.NetConn()
+}
+func (conn *WebSocketConn) UnderlyingConn() net.Conn {
+	return conn.Conn.UnderlyingConn()
+}
+func (conn *WebSocketConn) EnableWriteCompression(enable bool) {
+	conn.Conn.EnableWriteCompression(enable)
+}
+func (conn *WebSocketConn) SetCompressionLevel(level int) error {
+	return conn.Conn.SetCompressionLevel(level)
+}
+func (conn *WebSocketConn) CloseHandler() func(code int, text string) error {
+	return conn.Conn.CloseHandler()
+}
+func (conn *WebSocketConn) PingHandler() func(appData string) error {
+	return conn.Conn.PingHandler()
+}
+func (conn *WebSocketConn) PongHandler() func(appData string) error {
+	return conn.Conn.PongHandler()
+}
+func (conn *WebSocketConn) Subprotocol() string {
+	return conn.Conn.Subprotocol()
+}
+func (conn *WebSocketConn) Locals(key string, value ...interface{}) interface{} {
+	return conn.Conn.Locals(key, value...)
+}
+func (conn *WebSocketConn) Params(key string, defaultValue ...string) string {
+	return conn.Conn.Params(key, defaultValue...)
+}
+func (conn *WebSocketConn) Query(key string, defaultValue ...string) string {
+	return conn.Conn.Query(key, defaultValue...)
+}
+func (conn *WebSocketConn) Cookies(key string, defaultValue ...string) string {
+	return conn.Conn.Cookies(key, defaultValue...)
+}
+func (conn *WebSocketConn) Headers(key string, defaultValue ...string) string {
+	return conn.Conn.Headers(key, defaultValue...)
+}
+func (conn *WebSocketConn) IP() string {
+	return conn.Conn.IP()
+}
+
+func (cfg WebSocketConfig) toFiberConfig() websocket.Config {
+	fiberCfg := websocket.Config{
+		HandshakeTimeout:  cfg.HandshakeTimeout,
+		Subprotocols:      cfg.Subprotocols,
+		Origins:           cfg.Origins,
+		ReadBufferSize:    cfg.ReadBufferSize,
+		WriteBufferSize:   cfg.WriteBufferSize,
+		EnableCompression: cfg.EnableCompression,
+	}
+	if cfg.Next != nil {
+		fiberCfg.Next = func(c fiber.Ctx) bool {
+			return cfg.Next(&WebCtx{Ctx: c})
+		}
+	}
+	if cfg.RecoverHandler != nil {
+		fiberCfg.RecoverHandler = func(c *websocket.Conn) {
+			cfg.RecoverHandler(&WebSocketConn{Conn: c})
+		}
+	}
+	return fiberCfg
 }
 
 // HTTP Headers were copied from net/http.
