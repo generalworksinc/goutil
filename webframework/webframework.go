@@ -440,6 +440,21 @@ func (conn *WebSocketConn) ReadMessage() (messageType int, p []byte, err error) 
 func (conn *WebSocketConn) WriteMessage(messageType int, data []byte) error {
 	return conn.Conn.WriteMessage(messageType, data)
 }
+func (conn *WebSocketConn) WriteMessageText(data []byte) error {
+	return conn.Conn.WriteMessage(websocket.TextMessage, data)
+}
+func (conn *WebSocketConn) WriteMessageBinary(data []byte) error {
+	return conn.Conn.WriteMessage(websocket.BinaryMessage, data)
+}
+func (conn *WebSocketConn) WriteMessageClose(data []byte) error {
+	return conn.Conn.WriteMessage(websocket.CloseMessage, data)
+}
+func (conn *WebSocketConn) WriteMessagePing(data []byte) error {
+	return conn.Conn.WriteMessage(websocket.PingMessage, data)
+}
+func (conn *WebSocketConn) WriteMessagePong(data []byte) error {
+	return conn.Conn.WriteMessage(websocket.PongMessage, data)
+}
 func (conn *WebSocketConn) Close() error {
 	return conn.Conn.Close()
 }
