@@ -302,6 +302,9 @@ func (ctx WebCtx) SendString(bodyStr string) error {
 func (ctx WebCtx) Set(key string, val string) {
 	ctx.Ctx.(fiber.Ctx).Set(key, val)
 }
+func (ctx WebCtx) SetRequestQuery(key string, value string) {
+	ctx.Ctx.(fiber.Ctx).RequestCtx().QueryArgs().Set(key, value)
+}
 func (ctx WebCtx) Redirect(location string, status ...int) error {
 	r := ctx.Ctx.(fiber.Ctx).Redirect()
 	if len(status) > 0 {
@@ -398,6 +401,9 @@ func (ctx WebCtx) SendStream(stream io.Reader, size ...int) error {
 }
 func (ctx WebCtx) BodyWriter() io.Writer {
 	return ctx.Ctx.(fiber.Ctx).Response().BodyWriter()
+}
+func (ctx WebCtx) Done() <-chan struct{} {
+	return ctx.Ctx.(fiber.Ctx).Done()
 }
 
 // WebSocket //////////////////////////////////////////////////
