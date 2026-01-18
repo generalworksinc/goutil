@@ -447,22 +447,17 @@ const (
 
 func (conn *WebSocketConn) ReadMessage() (messageType WsMessageType, p []byte, err error) {
 	msgType, p, err := conn.Conn.ReadMessage()
-	var msgTypeEnum WsMessageType
-	switch msgType {
-	case websocket.TextMessage:
-		msgTypeEnum = WsMessageTypeText
-	case websocket.BinaryMessage:
-		msgTypeEnum = WsMessageTypeBinary
-	case websocket.CloseMessage:
-		msgTypeEnum = WsMessageTypeClose
-	case websocket.PingMessage:
-		msgTypeEnum = WsMessageTypePing
-	case websocket.PongMessage:
-		msgTypeEnum = WsMessageTypePong
+	mt := WsMessageType(msgType)
+	switch mt {
+	case WsMessageTypeText,
+		WsMessageTypeBinary,
+		WsMessageTypeClose,
+		WsMessageTypePing,
+		WsMessageTypePong:
+		return mt, p, nil
 	default:
-		msgTypeEnum = WsMessageTypeOther
+		return WsMessageTypeOther, p, err
 	}
-	return msgTypeEnum, p, err
 }
 func (conn *WebSocketConn) WriteMessage(messageType WsMessageType, data []byte) error {
 	return conn.Conn.WriteMessage(int(messageType), data)
