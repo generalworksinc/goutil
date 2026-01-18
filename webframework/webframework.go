@@ -434,11 +434,38 @@ type WebSocketConn struct {
 	Conn *websocket.Conn
 }
 
-func (conn *WebSocketConn) ReadMessage() (messageType int, p []byte, err error) {
-	return conn.Conn.ReadMessage()
+type WsMessageType int
+
+const (
+	WsMessageTypeText   WsMessageType = websocket.TextMessage
+	WsMessageTypeBinary WsMessageType = websocket.BinaryMessage
+	WsMessageTypeClose  WsMessageType = websocket.CloseMessage
+	WsMessageTypePing   WsMessageType = websocket.PingMessage
+	WsMessageTypePong   WsMessageType = websocket.PongMessage
+	WsMessageTypeOther  WsMessageType = -1
+)
+
+func (conn *WebSocketConn) ReadMessage() (messageType WsMessageType, p []byte, err error) {
+	msgType, p, err := conn.Conn.ReadMessage()
+	var msgTypeEnum WsMessageType
+	switch msgType {
+	case websocket.TextMessage:
+		msgTypeEnum = WsMessageTypeText
+	case websocket.BinaryMessage:
+		msgTypeEnum = WsMessageTypeBinary
+	case websocket.CloseMessage:
+		msgTypeEnum = WsMessageTypeClose
+	case websocket.PingMessage:
+		msgTypeEnum = WsMessageTypePing
+	case websocket.PongMessage:
+		msgTypeEnum = WsMessageTypePong
+	default:
+		msgTypeEnum = WsMessageTypeOther
+	}
+	return msgTypeEnum, p, err
 }
-func (conn *WebSocketConn) WriteMessage(messageType int, data []byte) error {
-	return conn.Conn.WriteMessage(messageType, data)
+func (conn *WebSocketConn) WriteMessage(messageType WsMessageType, data []byte) error {
+	return conn.Conn.WriteMessage(int(messageType), data)
 }
 func (conn *WebSocketConn) WriteMessageText(data []byte) error {
 	return conn.Conn.WriteMessage(websocket.TextMessage, data)
