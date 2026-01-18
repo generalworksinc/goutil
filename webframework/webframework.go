@@ -402,6 +402,14 @@ func (ctx WebCtx) SendStream(stream io.Reader, size ...int) error {
 func (ctx WebCtx) BodyWriter() io.Writer {
 	return ctx.Ctx.(fiber.Ctx).Response().BodyWriter()
 }
+func (ctx WebCtx) MultipartForm() (*multipart.Form, error) {
+	return ctx.Ctx.(fiber.Ctx).MultipartForm()
+}
+
+func (ctx WebCtx) Attachment(filename ...string) {
+	ctx.Ctx.(fiber.Ctx).Attachment(filename...)
+}
+
 func (ctx WebCtx) Done() <-chan struct{} {
 	return ctx.Ctx.(fiber.Ctx).Done()
 }
