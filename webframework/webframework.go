@@ -252,6 +252,21 @@ func (group WebGroup) Use(args ...interface{}) {
 	group.Group.(*fiber.Group).Use(convertedArgs...)
 }
 
+func (group WebGroup) WsGet(path string, handlers ...WsHandler) {
+	hs := toFiberHandlersFromWs(handlers, nil)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Get(path, hs[0], hs[1:]...)
+}
+func (group WebGroup) WsGetWithConfig(path string, cfg WebSocketConfig, handlers ...WsHandler) {
+	hs := toFiberHandlersFromWs(handlers, &cfg)
+	if len(hs) == 0 {
+		return
+	}
+	group.Group.(*fiber.Group).Get(path, hs[0], hs[1:]...)
+}
+
 // Cookie //////////////////////////////////////////////////
 func (cookie WebCookie) SetName(val string) {
 	cookie.Cookie.(*fiber.Cookie).Name = val
