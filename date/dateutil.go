@@ -66,6 +66,16 @@ func GetFirstDayOfNextMonth(targetTime time.Time, location *time.Location) time.
 	return firstOfNextMonth
 }
 
+// TruncateMidnight returns the date at 00:00:00 in the given location.
+// If location is nil, time.Local is used.
+func TruncateMidnight(targetTime time.Time, location *time.Location) time.Time {
+	if location == nil {
+		location = time.Local
+	}
+	localTime := targetTime.In(location)
+	return time.Date(localTime.Year(), localTime.Month(), localTime.Day(), 0, 0, 0, 0, location)
+}
+
 // 当月末を取得
 func TruncDateAndGetLastSecondOfMonth(targetTime time.Time) (time.Time, time.Time) {
 	jst, _ := time.LoadLocation("Asia/Tokyo")
