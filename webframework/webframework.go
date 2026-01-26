@@ -41,6 +41,22 @@ type WebRouter interface {
 type WebHandler func(*WebCtx) error
 type WsHandler func(*WebSocketConn)
 
+// AppOption applies low-level server options without leaking Fiber to callers.
+type AppOption func(*fiber.App)
+
+// WithReadBufferSize sets fasthttp's ReadBufferSize to allow larger headers.
+// Pass bytes (e.g., 32*1024). Values <= 0 are ignored.
+func WithReadBufferSize(size int) AppOption {
+	return func(app *fiber.App) {
+		if size <= 0 {
+			return
+		}
+		if srv := app.Server(); srv != nil {
+			srv.ReadBufferSize = size
+		}
+	}
+}
+
 type WebSocketConfig struct {
 	Next              func(*WebCtx) bool
 	HandshakeTimeout  time.Duration
@@ -86,6 +102,11 @@ func toFiberHandlersFromWs(webHandlerList []WsHandler, cfg *WebSocketConfig) []a
 
 // Application /////////////////////////////////////////////
 func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
+	return NewAppWithOptions(errorHandler)
+}
+
+// NewAppWithOptions builds a WebApp and applies low-level options safely.
+func NewAppWithOptions(errorHandler func(*WebCtx, error) error, opts ...AppOption) *WebApp {
 	fiberCfg := fiber.Config{
 		//Prefork:       true,
 		//CaseSensitive: true,
@@ -99,6 +120,11 @@ func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 	}
 
 	app := fiber.New(fiberCfg)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(app)
+		}
+	}
 	app.Use(compress.New())
 	app.Use(cors.New())
 
