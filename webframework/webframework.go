@@ -359,6 +359,18 @@ func (ctx WebCtx) Cookie(cookie *WebCookie) {
 func (ctx WebCtx) Query(key string, defaultValue ...string) string {
 	return ctx.Ctx.(fiber.Ctx).Query(key, defaultValue...)
 }
+
+// RequestHeaderSizeBytes returns an approximate total size of request headers in bytes.
+// It sums key/value lengths plus separators for each header line.
+func (ctx WebCtx) RequestHeaderSizeBytes() int {
+	fc := ctx.Ctx.(fiber.Ctx)
+	total := 0
+	fc.Request().Header.VisitAll(func(k, v []byte) {
+		// "Key: Value\r\n" => len(k)+len(v)+4
+		total += len(k) + len(v) + 4
+	})
+	return total
+}
 func (ctx WebCtx) Params(key string, defaultValue ...string) string {
 	return ctx.Ctx.(fiber.Ctx).Params(key, defaultValue...)
 }
