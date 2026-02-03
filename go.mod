@@ -3,9 +3,11 @@ module github.com/generalworksinc/goutil
 go 1.25.0
 
 require (
+	aidanwoods.dev/go-paseto v1.6.0
 	github.com/dsnet/compress v0.0.1
-	github.com/getsentry/sentry-go v0.40.0
-	github.com/gofiber/fiber/v3 v3.0.0-rc.3
+	github.com/getsentry/sentry-go v0.42.0
+	github.com/gofiber/contrib/v3/websocket v1.0.0-rc.1
+	github.com/gofiber/fiber/v3 v3.0.0
 	github.com/google/uuid v1.6.0
 	github.com/ktnyt/go-moji v1.0.0
 	github.com/kurehajime/cjk2num v0.0.0-20210929142953-005d508333d0
@@ -13,33 +15,33 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/stretchr/testify v1.11.1
 	github.com/yeka/zip v0.0.0-20231116150916-03d6312748a9
-	golang.org/x/crypto v0.46.0
+	golang.org/x/crypto v0.47.0
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac
 	golang.org/x/text v0.33.0
 )
 
 require (
-	aidanwoods.dev/go-paseto v1.6.0 // indirect
 	aidanwoods.dev/go-result v0.3.1 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fasthttp/websocket v1.5.12 // indirect
-	github.com/gofiber/contrib/v3/websocket v1.0.0-rc.1 // indirect
 	github.com/gofiber/schema v1.6.0 // indirect
-	github.com/gofiber/utils/v2 v2.0.0-rc.2 // indirect
-	github.com/klauspost/compress v1.18.2 // indirect
+	github.com/gofiber/utils/v2 v2.0.0 // indirect
+	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/savsgio/gotils v0.0.0-20250924091648-bce9a52d7761 // indirect
-	github.com/tinylib/msgp v1.5.0 // indirect
+	github.com/tinylib/msgp v1.6.3 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.68.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
+	github.com/valyala/fasthttp v1.69.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/generalworksinc/goutil => ./
+
+replace github.com/tdakkota/asciicheck => github.com/golangci/asciicheck v0.5.0
