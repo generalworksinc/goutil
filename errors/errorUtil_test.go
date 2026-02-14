@@ -1,6 +1,7 @@
 package gw_errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,6 +27,9 @@ func (t *mockTransport) SendEvent(event *sentry.Event) {
 	}
 }
 func (t *mockTransport) Flush(timeout time.Duration) bool {
+	return true
+}
+func (t *mockTransport) FlushWithContext(ctx context.Context) bool {
 	return true
 }
 
