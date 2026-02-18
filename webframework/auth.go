@@ -13,12 +13,13 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-const REFRESH_TOKEN_KEY = "refresh_token"
 var (
 	v4SymmetricKey paseto.V4SymmetricKey
 	keyOnce        sync.Once
 	keyInitErr     error
 )
+
+const REFRESH_TOKEN_KEY = "refresh_token"
 
 func loadV4Key(hexString string) (paseto.V4SymmetricKey, error) {
 	keyOnce.Do(func() {
@@ -101,14 +102,21 @@ type RefreshTokenCookieOptions struct {
 	MaxAgeSeconds *int
 }
 
-// GetRefreshTokenFromRequest returns refresh token from HttpOnly cookie first,
+// GetRefreshTokenFromRequest returns refresh token from the default HttpOnly cookie first,
 // then falls back to Authorization: Bearer <token>.
-func GetRefreshTokenFromRequest(c *WebCtx, refreshTokenKey string) string {
-	key := REFRESH_TOKEN_KEY
-	if gw_string.IsNotBlank(refreshTokenKey) {
-		key = refreshTokenKey
+func GetRefreshTokenFromRequest(c *WebCtx) string {
+	return GetRefreshTokenFromRequestByKey(c, REFRESH_TOKEN_KEY)
+}
+
+// GetRefreshTokenFromRequestByKey returns refresh token from the specified HttpOnly cookie first,
+// then falls back to Authorization: Bearer <token>.
+func GetRefreshTokenFromRequestByKey(c *WebCtx, refreshTokenKey string) string {
+	cookieKey := strings.TrimSpace(refreshTokenKey)
+	if cookieKey == "" {
+		cookieKey = REFRESH_TOKEN_KEY
 	}
-	refreshToken := c.Cookies(key)
+
+	refreshToken := c.Cookies(cookieKey)
 	if refreshToken == "" {
 		refreshToken = strings.TrimPrefix(c.Get(HeaderAuthorization, ""), "Bearer ")
 	}
