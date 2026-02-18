@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+const REFRESH_TOKEN_KEY = "refresh_token"
 var (
 	v4SymmetricKey paseto.V4SymmetricKey
 	keyOnce        sync.Once
@@ -99,11 +101,25 @@ type RefreshTokenCookieOptions struct {
 	MaxAgeSeconds *int
 }
 
+// GetRefreshTokenFromRequest returns refresh token from HttpOnly cookie first,
+// then falls back to Authorization: Bearer <token>.
+func GetRefreshTokenFromRequest(c *WebCtx, refreshTokenKey string) string {
+	key := REFRESH_TOKEN_KEY
+	if gw_string.IsNotBlank(refreshTokenKey) {
+		key = refreshTokenKey
+	}
+	refreshToken := c.Cookies(key)
+	if refreshToken == "" {
+		refreshToken = strings.TrimPrefix(c.Get(HeaderAuthorization, ""), "Bearer ")
+	}
+	return refreshToken
+}
+
 func SetRefreshTokenCookie(c *WebCtx, token string, expiresAt time.Time, opt *RefreshTokenCookieOptions) {
 	ck := &WebCookie{Cookie: &fiber.Cookie{}}
 	fc := ck.Cookie.(*fiber.Cookie)
 
-	name := "refresh_token"
+	name := REFRESH_TOKEN_KEY
 	path := "/api"
 	domain := ""
 	sameSite := "Lax"
@@ -149,4 +165,10 @@ func SetRefreshTokenCookie(c *WebCtx, token string, expiresAt time.Time, opt *Re
 		fc.Secure = *opt.Secure
 	}
 	c.Cookie(ck)
+}
+
+// ExpireRefreshTokenCookie invalidates refresh token cookie on server side.
+func ExpireRefreshTokenCookie(c *WebCtx, opt *RefreshTokenCookieOptions) {
+	expiredAt := time.Now().Add(-1 * time.Hour)
+	SetRefreshTokenCookie(c, "", expiredAt, opt)
 }
