@@ -30,10 +30,13 @@ type WebCtx struct {
 	Ctx interface{}
 }
 type WebApp struct {
-	App interface{}
+	App  interface{}
+	docs *docRegistry
 }
 type WebGroup struct {
-	Group interface{}
+	Group  interface{}
+	prefix string
+	docs   *docRegistry
 }
 type WebRouter interface {
 	Get(key string, defaultValue ...string) string
