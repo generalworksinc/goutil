@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/getsentry/sentry-go"
 
@@ -49,6 +50,9 @@ func CheckSentToLogger(err error) bool {
 	}
 	return isSent
 }
+func serverTimeUTCString() string {
+	return time.Now().UTC().Format(time.RFC3339Nano)
+}
 func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 	// Recover from any panics during error logging
 	defer func() {
@@ -58,7 +62,10 @@ func errorLog(err error, sendLogger bool, objList ...interface{}) error {
 	}()
 
 	//error message, relational data
-	errorMessageList := []string{"err: " + err.Error()}
+	errorMessageList := []string{
+		"server_time_utc: " + serverTimeUTCString(),
+		"err: " + err.Error(),
+	}
 	for ind, obj := range objList {
 		objStr := "nil"
 		if obj != nil {
@@ -216,13 +223,14 @@ func CatchPanic(errPt *error, sendLogger bool) {
 				stackTrace += fmt.Sprintf(" -> %d: %s: %s(%d)\n", depth, runtime.FuncForPC(pc).Name(), src, line)
 			}
 		}
-		log.Println("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
+		msg := "panic capture. message:" + fmt.Sprintf("%v", r) + "\n\nserver_time_utc: " + serverTimeUTCString() + "\n\n" + stackTrace
+		log.Println(msg)
 		isSentToLogger := CheckSentToLogger(err)
 		log.Println("isSentToLogger on CatchPanic: ", isSentToLogger)
 		if sendLogger && !isSentToLogger {
 			//sentryに送信
 			log.Println("sentry.CaptureMessage on CatchPanic start!")
-			sentry.CaptureMessage("panic capture. message:" + fmt.Sprintf("%v", r) + "\n\n" + stackTrace)
+			sentry.CaptureMessage(msg)
 			log.Println("sentry.CaptureMessage on CatchPanic end!")
 			err = LoggerSentFlagOn(err)
 		}
