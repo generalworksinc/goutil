@@ -103,7 +103,22 @@ func (r *docRegistry) register(method, path string, doc RouteDoc) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.entries = append(r.entries, docEntry{method: strings.ToLower(method), path: path, doc: doc})
+	r.entries = append(r.entries, docEntry{method: strings.ToLower(method), path: toOpenAPIPath(path), doc: doc})
+}
+
+// toOpenAPIPath converts Fiber/Express style ":param" path segments to
+// OpenAPI style "{param}" segments.
+func toOpenAPIPath(path string) string {
+	if !strings.Contains(path, ":") {
+		return path
+	}
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		if strings.HasPrefix(p, ":") && len(p) > 1 {
+			parts[i] = "{" + p[1:] + "}"
+		}
+	}
+	return strings.Join(parts, "/")
 }
 
 // SetOpenAPIInfo replaces the static info block on the doc registry.

@@ -141,7 +141,8 @@ func NewAppWithOptions(errorHandler func(*WebCtx, error) error, opts ...AppOptio
 	// v3: Static メソッドは削除。静的ミドルウェアに置き換え
 	app.Use(static.New("/static", static.Config{FS: os.DirFS("static")}))
 	return &WebApp{
-		App: app,
+		App:  app,
+		docs: newDocRegistry(),
 	}
 }
 
@@ -164,7 +165,9 @@ func normalizeLoggerFormat(format string) string {
 }
 func (app WebApp) Group(prefix string, handlers ...WebHandler) WebGroup {
 	return WebGroup{
-		Group: app.App.(*fiber.App).Group(prefix, toFiberHandlers(handlers)...),
+		Group:  app.App.(*fiber.App).Group(prefix, toFiberHandlers(handlers)...),
+		prefix: prefix,
+		docs:   app.docs,
 	}
 }
 func (app WebApp) Get(path string, handlers ...WebHandler) {

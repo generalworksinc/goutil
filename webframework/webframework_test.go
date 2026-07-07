@@ -44,3 +44,56 @@ func TestSetLoggerAcceptsLegacyHeaderTag(t *testing.T) {
 		t.Fatalf("expected logger output to include legacy header value, got %q", out.String())
 	}
 }
+
+func TestOpenAPIRegistersAppDocAndConvertsPathParams(t *testing.T) {
+	app := NewApp(func(ctx *WebCtx, err error) error {
+		return ctx.Status(http.StatusInternalServerError).SendString(err.Error())
+	})
+	app.GetDoc("/users/:id", RouteDoc{Summary: "Get user"}, func(ctx *WebCtx) error {
+		return ctx.SendString("ok")
+	})
+
+	doc := app.OpenAPI()
+	paths, ok := doc["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("paths should be map[string]any, got %T", doc["paths"])
+	}
+	pathDoc, ok := paths["/users/{id}"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected OpenAPI path /users/{id}, got %#v", paths)
+	}
+	getDoc, ok := pathDoc["get"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected get operation, got %#v", pathDoc)
+	}
+	if getDoc["summary"] != "Get user" {
+		t.Fatalf("unexpected summary: %#v", getDoc["summary"])
+	}
+}
+
+func TestOpenAPIRegistersGroupDocWithPrefix(t *testing.T) {
+	app := NewApp(func(ctx *WebCtx, err error) error {
+		return ctx.Status(http.StatusInternalServerError).SendString(err.Error())
+	})
+	group := app.Group("/api")
+	group.PostDoc("users/:id", RouteDoc{Summary: "Update user"}, func(ctx *WebCtx) error {
+		return ctx.SendString("ok")
+	})
+
+	doc := app.OpenAPI()
+	paths, ok := doc["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("paths should be map[string]any, got %T", doc["paths"])
+	}
+	pathDoc, ok := paths["/api/users/{id}"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected OpenAPI path /api/users/{id}, got %#v", paths)
+	}
+	postDoc, ok := pathDoc["post"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected post operation, got %#v", pathDoc)
+	}
+	if postDoc["summary"] != "Update user" {
+		t.Fatalf("unexpected summary: %#v", postDoc["summary"])
+	}
+}
