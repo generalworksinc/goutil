@@ -5,9 +5,11 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 // DefaultConfig は GORM の標準設定を返す。
+// - テーブル名は単数形 snake_case（SingularTable。struct 名がそのままテーブル名になるため TableName() の実装は不要）
 // - FK 制約を DDL に含めない（データを pure に保つ方針。リレーションはアプリ層のタグ定義で扱う）
 // - タイムスタンプは UTC
 // - debug 時のみ SQL ログを出力
@@ -15,6 +17,7 @@ import (
 // テナントガード（UseTenantGuard）も用途ごとのライフサイクルに合わせて呼び出し側で登録する。
 func DefaultConfig(debug bool) *gorm.Config {
 	config := &gorm.Config{
+		NamingStrategy:                           schema.NamingStrategy{SingularTable: true},
 		DisableForeignKeyConstraintWhenMigrating: true,
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
