@@ -187,10 +187,14 @@ func Wrap(err error, objList ...interface{}) error {
 	//If not wrapped with failer yet, then create new Failer Error
 	var newError error
 	if failerErrorCode == nil {
+		// failure.New(err) だと元エラーが「code」としてのみ格納され underlying が nil になり、
+		// errors.Is / errors.As が透過しない（sentinel エラーの判別が壊れる）。
+		// Translate(err, err) は「code=元エラー」の既存規約（CodeOf ベースの検出・復元が依存）を
+		// 保ったまま、標準の Unwrap チェーン（underlying=元エラー）も張る。
 		if failureCtx != nil {
-			newError = failure.New(err, failureCtx)
+			newError = failure.Translate(err, err, failureCtx)
 		} else {
-			newError = failure.New(err)
+			newError = failure.Translate(err, err)
 		}
 	} else {
 		//If wrapped with failer already, and has context, then add new context
