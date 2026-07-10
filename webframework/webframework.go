@@ -112,24 +112,50 @@ type CORSOptions struct {
 	AllowCredentials bool
 }
 
+// AppSettings はアプリ構築時の追加設定。
+type AppSettings struct {
+	// CORS は許可オリジンの明示設定。nil なら cors.New() のデフォルト。
+	CORS *CORSOptions
+	// CompressSkip が true を返したリクエストは圧縮しない。
+	// nil ならデフォルトの SkipCompressForStreaming(WS/SSEをスキップ)が適用される。
+	// 独自条件が必要な場合のみ指定する(SkipCompressForStreaming と組み合わせ可)。
+	// 全リクエストを圧縮したい場合は常に false を返す関数を渡す。
+	// シグネチャは WebCtx ベース(利用側にfiber依存を持ち込まないため)。
+	CompressSkip func(c *WebCtx) bool
+}
+
+// SkipCompressForStreaming は WebSocket アップグレードと SSE(Accept: text/event-stream)を
+// 圧縮対象から外す標準実装。パス単位の除外が必要な場合は利用側でこの関数と組み合わせる。
+func SkipCompressForStreaming(c *WebCtx) bool {
+	if strings.EqualFold(strings.TrimSpace(c.Get(fiber.HeaderUpgrade)), "websocket") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(c.Get(fiber.HeaderAccept)), "text/event-stream")
+}
+
 // Application /////////////////////////////////////////////
 func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
-	return NewAppWithOptions(errorHandler)
+	return NewAppWithSettings(errorHandler, nil)
 }
 
 // NewAppWithCORS は CORS を明示設定して WebApp を構築する。
 // corsOpt が nil の場合は従来どおりのデフォルト（全オリジン許可・credentialsなし）。
 // httpOnly cookie（リフレッシュトークン等）を跨オリジンで使う場合はこちらを使うこと。
 func NewAppWithCORS(errorHandler func(*WebCtx, error) error, corsOpt *CORSOptions, opts ...AppOption) *WebApp {
-	return newAppInternal(errorHandler, corsOpt, opts...)
+	return NewAppWithSettings(errorHandler, &AppSettings{CORS: corsOpt}, opts...)
 }
 
 // NewAppWithOptions builds a WebApp and applies low-level options safely.
 func NewAppWithOptions(errorHandler func(*WebCtx, error) error, opts ...AppOption) *WebApp {
-	return newAppInternal(errorHandler, nil, opts...)
+	return NewAppWithSettings(errorHandler, nil, opts...)
 }
 
-func newAppInternal(errorHandler func(*WebCtx, error) error, corsOpt *CORSOptions, opts ...AppOption) *WebApp {
+// NewAppWithSettings は AppSettings 付きで WebApp を構築する。
+func NewAppWithSettings(errorHandler func(*WebCtx, error) error, settings *AppSettings, opts ...AppOption) *WebApp {
+	return newAppInternal(errorHandler, settings, opts...)
+}
+
+func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettings, opts ...AppOption) *WebApp {
 	fiberCfg := fiber.Config{
 		//Prefork:       true,
 		//CaseSensitive: true,
@@ -148,11 +174,18 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, corsOpt *CORSOption
 			opt(app)
 		}
 	}
-	app.Use(compress.New())
-	if corsOpt != nil {
+	// WS/SSEストリーミングの圧縮は互換性を壊すため、デフォルトで常にスキップする。
+	skip := SkipCompressForStreaming
+	if settings != nil && settings.CompressSkip != nil {
+		skip = settings.CompressSkip
+	}
+	app.Use(compress.New(compress.Config{Next: func(c fiber.Ctx) bool {
+		return skip(&WebCtx{Ctx: c})
+	}}))
+	if settings != nil && settings.CORS != nil {
 		app.Use(cors.New(cors.Config{
-			AllowOrigins:     corsOpt.AllowOrigins,
-			AllowCredentials: corsOpt.AllowCredentials,
+			AllowOrigins:     settings.CORS.AllowOrigins,
+			AllowCredentials: settings.CORS.AllowCredentials,
 		}))
 	} else {
 		app.Use(cors.New())
@@ -448,6 +481,10 @@ func (ctx WebCtx) FormValue(key string, defaultValue ...string) string {
 
 func (ctx WebCtx) Get(key string, defaultValue ...string) string {
 	return ctx.Ctx.(fiber.Ctx).Get(key, defaultValue...)
+}
+
+func (ctx WebCtx) Path() string {
+	return ctx.Ctx.(fiber.Ctx).Path()
 }
 
 func (ctx WebCtx) JSON(data interface{}) error {
