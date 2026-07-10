@@ -23,6 +23,12 @@ db, err := gorm.Open(postgres.Open(dsn), gw_gorm.DefaultConfig(debug))
 `BaseModelSimple` と、それぞれの Ulid 版（時刻ソート可能な ULID を BeforeCreate で自動採番）。
 UUID/ULID は **Id が空のときだけ** BeforeCreate フックで自動セットされる。
 
+**`BaseModelByManualId` は Id を含まない**（CreatedAt/UpdatedAt のみ）。「Id はモデル側が自前定義する」
+バリエーション。使い分けの目安:
+- ID を必ず明示セットする運用でも、通常は `BaseModel`（自動採番は Id が空のときだけの no-op）で足りる
+- Id のセット忘れを「ランダム UUID で黙って埋まる」のではなく「空PKエラーで即検出」したい特殊なモデルや、
+  Id の型・タグを変えたいモデルだけ `BaseModelByManualId` + 自前 Id 定義を使う
+
 ## テナントガード
 
 対象モデルは**マーカーインターフェース**（中身のない宣言メソッド1行）で明示する:

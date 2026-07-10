@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime"
 
@@ -33,20 +33,18 @@ type ErrorData struct {
 
 func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) string) func(ctx *WebCtx, err error) error {
 	return func(ctx *WebCtx, err error) error {
+		reqCtx := ctx.Context()
 		defer func() {
 			r := recover()
 			if r != nil {
-				log.Println("panic occured in CustomHTTPErrorHandler.")
-				log.Println("Recover!:", r)
+				slog.ErrorContext(reqCtx, "panic occurred in CustomHTTPErrorHandler", slog.Any("recover", r))
 			}
 		}()
 
 		settedCode := ctx.StatusCode()
-		log.Println("settedCode:", settedCode)
 
 		code := http.StatusInternalServerError
 		message := "error has occured"
-		log.Println("error message:", err.Error())
 
 		if e, ok := err.(*fiber.Error); ok {
 			code = e.Code
@@ -69,13 +67,7 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 			}
 		}
 
-		// userId := ""
-		// jsonToken, loginErr := domain.LoginAt(ctx)
-		// if loginErr == nil && jsonToken != nil {
-		// 	userId = jsonToken.Get("Id")
-		// }
 		userId := getUserIdFunc(ctx)
-		log.Println("user data. ip:", ctx.IP(), "ua:", string(ctx.UserAgent()), "userId:", userId, "version", version)
 		bodyStrUtf8 := utf8string.NewString(string(ctx.Body()))
 		bodyStr := ""
 		if bodyStrUtf8.RuneCount() > 2000 {
@@ -100,11 +92,25 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 			// FullString: ctx.String(),
 		}
 
-		errorJson, _ := json.Marshal(errorData)
-		log.Println(string(errorJson))
+		// 5xx は ERROR、4xx 等は WARN で構造化出力（request_id は context 注入ハンドラが付与）
+		level := slog.LevelWarn
+		if code >= 500 {
+			level = slog.LevelError
+		}
+		slog.LogAttrs(reqCtx, level, "request error",
+			slog.Int("status", code),
+			slog.String("error", errorData.Error),
+			slog.String("message", message),
+			slog.String("url", errorData.Url),
+			slog.String("method", errorData.Method),
+			slog.String("ip", errorData.Ip),
+			slog.String("ua", errorData.Ua),
+			slog.String("error_user_id", userId),
+			slog.String("version", version),
+			slog.String("stack_trace", stackTrace),
+		)
 
 		isSentToLogger := gw_errors.CheckSentToLogger(err)
-		log.Println("isSentToLogger on CustomHTTPErrorHandler: ", isSentToLogger)
 		if !isSentToLogger {
 			// if errorData.Ua != "" && errorData.Url != "http:///" && errorData.Message != "Bad Request" {
 			if errorData.Url != "http:///" && errorData.Message != "Bad Request" {
@@ -112,7 +118,7 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
-							log.Printf("Failed to send error to Sentry: %v", r)
+							slog.ErrorContext(reqCtx, "failed to send error to Sentry", slog.Any("recover", r))
 						}
 					}()
 
@@ -126,7 +132,7 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 					var formatedJsonBytes bytes.Buffer
 					jsonErr := json.Indent(&formatedJsonBytes, errorJsonForSentry, "", "  ") // indentは2スペース
 					if jsonErr != nil {
-						log.Printf("JSONの整形に失敗しました: %v\n", jsonErr)
+						slog.WarnContext(reqCtx, "failed to format error JSON for Sentry", slog.String("error", jsonErr.Error()))
 						errorStr = string(errorJsonForSentry)
 					} else {
 						errorStr = formatedJsonBytes.String()
@@ -138,15 +144,13 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 						defer func() {
 							if r := recover(); r != nil {
 								sentryMsg = "Error creating Sentry message"
-								log.Printf("Failed to format Sentry message: %v", r)
+								slog.ErrorContext(reqCtx, "failed to format Sentry message", slog.Any("recover", r))
 							}
 						}()
 						sentryMsg = fmt.Sprintf("error on errorhandler:: %s\n\n%s\n\n%s", errorData.Error, errorData.StackTrace, errorStr)
 					}()
 
-					log.Println("sentry.CaptureMessage on errorHandler start!")
 					sentry.CaptureMessage(sentryMsg)
-					log.Println("sentry.CaptureMessage on errorHandler end!")
 				}()
 			}
 		}

@@ -453,6 +453,35 @@ func (ctx WebCtx) Next() error {
 	return ctx.Ctx.(fiber.Ctx).Next()
 }
 
+// Use はアプリ全体のミドルウェアを登録する（登録順に実行される）。
+func (app WebApp) Use(handlers ...WebHandler) {
+	for _, h := range handlers {
+		app.App.(*fiber.App).Use(toFiberHandler(h))
+	}
+}
+
+// Context はリクエストの context.Context を返す（slog.XxxContext やDBの WithContext に渡す）。
+func (ctx WebCtx) Context() context.Context {
+	return ctx.Ctx.(fiber.Ctx).Context()
+}
+
+// SetContext はリクエストの context.Context を差し替える（request_id / user_id の伝搬用）。
+func (ctx WebCtx) SetContext(c context.Context) {
+	ctx.Ctx.(fiber.Ctx).SetContext(c)
+}
+
+// errorStatusCode はハンドラ返却エラーから実際にレスポンスへ載る status を推定する。
+// CustomHTTPErrorHandler と同じ規則: セット済み status（200/0 以外）は上書きしない。
+func errorStatusCode(err error, settedCode int) int {
+	if err == nil || (settedCode != 200 && settedCode != 0) {
+		return settedCode
+	}
+	if e, ok := err.(*fiber.Error); ok {
+		return e.Code
+	}
+	return fiber.StatusInternalServerError
+}
+
 func (ctx WebCtx) QueryParser(out interface{}) error {
 	return ctx.Ctx.(fiber.Ctx).Bind().Query(out)
 }
