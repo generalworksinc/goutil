@@ -104,13 +104,32 @@ func toFiberHandlersFromWs(webHandlerList []WsHandler, cfg *WebSocketConfig) []a
 	return hList
 }
 
+// CORSOptions は CORS の許可オリジンを明示する設定。
+// AllowCredentials を true にする場合、CORS 仕様上ワイルドカードオリジンは使えないため
+// AllowOrigins に具体的なオリジン（例: https://app.example.com）を列挙すること。
+type CORSOptions struct {
+	AllowOrigins     []string
+	AllowCredentials bool
+}
+
 // Application /////////////////////////////////////////////
 func NewApp(errorHandler func(*WebCtx, error) error) *WebApp {
 	return NewAppWithOptions(errorHandler)
 }
 
+// NewAppWithCORS は CORS を明示設定して WebApp を構築する。
+// corsOpt が nil の場合は従来どおりのデフォルト（全オリジン許可・credentialsなし）。
+// httpOnly cookie（リフレッシュトークン等）を跨オリジンで使う場合はこちらを使うこと。
+func NewAppWithCORS(errorHandler func(*WebCtx, error) error, corsOpt *CORSOptions, opts ...AppOption) *WebApp {
+	return newAppInternal(errorHandler, corsOpt, opts...)
+}
+
 // NewAppWithOptions builds a WebApp and applies low-level options safely.
 func NewAppWithOptions(errorHandler func(*WebCtx, error) error, opts ...AppOption) *WebApp {
+	return newAppInternal(errorHandler, nil, opts...)
+}
+
+func newAppInternal(errorHandler func(*WebCtx, error) error, corsOpt *CORSOptions, opts ...AppOption) *WebApp {
 	fiberCfg := fiber.Config{
 		//Prefork:       true,
 		//CaseSensitive: true,
@@ -130,7 +149,14 @@ func NewAppWithOptions(errorHandler func(*WebCtx, error) error, opts ...AppOptio
 		}
 	}
 	app.Use(compress.New())
-	app.Use(cors.New())
+	if corsOpt != nil {
+		app.Use(cors.New(cors.Config{
+			AllowOrigins:     corsOpt.AllowOrigins,
+			AllowCredentials: corsOpt.AllowCredentials,
+		}))
+	} else {
+		app.Use(cors.New())
+	}
 
 	app.Use(func(c fiber.Ctx) (err error) {
 		// Catch panics
