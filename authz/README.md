@@ -64,3 +64,9 @@ if gw_authz.Can(role, tenantId, "todo", "create") { ... }
 
 - 単一インスタンス前提。複数インスタンスでポリシーを動的変更する場合は casbin watcher で同期すること
 - 属性条件（時間・金額など）が主役になったら cerbos への乗り換えを検討する（判断基準はテンプレートの docs/authorization.md 参照）
+
+## TODO
+
+- ポーリング自動リロードの標準ヘルパー化: 現在はテンプレート側で `Enforcer().StartAutoLoadPolicy(interval)` を
+  フラグ定数つきで呼んでいる（generalworks-template-go-api-project の constant/authz.go + infrastructure/db.go 参照）。
+  複数プロダクトで同じ形が繰り返されたら `gw_authz.Init` のオプション（例: `WithAutoReload(interval)`）として取り込む
