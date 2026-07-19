@@ -71,7 +71,8 @@ err := db.Transaction(func(tx *gorm.DB) error {
 ```
 
 - `WithScopeContext` はScopeを複製して保存し、外部からのslice変更による認可範囲の変化を防ぐ。取得処理はTenant Guard内部に限定する
-- `AttachScope` は `Context()` / `SetContext()` を持つ `gw_web.WebCtx` などへ、Web frameworkへの直接依存なしでScopeを設定する
+- `AttachScope` は `*gw_web.WebCtx` 専用のFiber連携関数。HTTP middlewareで確定したScopeをリクエストのcontextへ設定する
+- HTTPを使わない処理では `WithScopeContext` と `ApplyScope` を利用し、`gw_web` の型を持ち込む必要はない
 - Scopeの保存場所は `context.Context` の1箇所だけで、Tenant GuardはGORMの `Statement.Context` から取得する
 - 明示DBと既定DBの選択はアプリケーション側の責務。transactionなどの明示DBにはcontextを再設定しない
 - transaction wrapperが必要ならアプリケーション側に置き、既定DBへcontextを設定して`Transaction`を呼ぶ

@@ -3,6 +3,7 @@ package gw_gorm
 import (
 	"context"
 
+	gw_web "github.com/generalworksinc/goutil/webframework"
 	"gorm.io/gorm"
 )
 
@@ -33,12 +34,9 @@ func scopeFromContext(ctx context.Context) (*Scope, bool) {
 	return cloneScope(scope), true
 }
 
-// AttachScopeは、認証済みScopeをHTTP contextなどが保持するcontext.Contextへ設定します。
-// 最小インターフェースだけを受け取り、gw_webなど特定のWeb frameworkへ依存しません。
-func AttachScope(target interface {
-	Context() context.Context
-	SetContext(context.Context)
-}, scope *Scope) {
+// AttachScopeは、認証済みScopeをgw_web.WebCtxのcontext.Contextへ設定します。
+// HTTP middlewareからTenant GuardへScopeを渡すための、Fiber向け連携関数です。
+func AttachScope(target *gw_web.WebCtx, scope *Scope) {
 	if target == nil {
 		return
 	}
