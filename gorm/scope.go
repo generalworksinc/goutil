@@ -81,12 +81,6 @@ func WithoutTenantScope(db *gorm.DB) *gorm.DB {
 	return db.Set(tenantScopeSkipKey, true).Session(&gorm.Session{})
 }
 
-// ScopeFrom は WithScope でセッションに載せたスコープを取り出す。
-// repository が業務判定（CanSeeOrg 等）にスコープの中身を使いたい場合に、引数で別途受け取らずに済む。
-func ScopeFrom(db *gorm.DB) (*Scope, bool) {
-	return ScopeFromContext(contextFromDB(db))
-}
-
 // UseTenantGuard は TenantScopedModel/OrgScopedModel/OrgSelfScopedModel への GORM 操作にスコープ条件を強制する。
 // Raw()/Exec() の生 SQL は GORM コールバックを通らないため、このガードの対象外。
 func UseTenantGuard(db *gorm.DB) error {
@@ -242,7 +236,11 @@ func AssertScopedModels(exceptions []any, models ...any) error {
 }
 
 func getScope(db *gorm.DB) (*Scope, bool) {
-	return ScopeFrom(db)
+	return scopeFrom(db)
+}
+
+func scopeFrom(db *gorm.DB) (*Scope, bool) {
+	return scopeFromContext(contextFromDB(db))
 }
 
 func shouldSkip(db *gorm.DB) bool {

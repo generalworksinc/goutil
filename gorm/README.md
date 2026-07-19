@@ -48,7 +48,6 @@ scoped := gw_gorm.WithScope(db, &gw_gorm.Scope{...}) // リクエスト毎にス
 - スコープ未設定でガード対象モデルに触ると `tenant scope is required` で**拒否される（fail-closed）**
 - Create は TenantIds が1件なら tenant_id を自動セット。複数/AllTenants は明示必須。organization_id はスコープ内検証
 - `WithoutTenantScope(db)` はスコープ解決・シード・管理バッチ等の明示的なガード除外（使用箇所は grep で監査可能に保つ）
-- `ScopeFrom(db)` でDBのcontextからスコープを取り出せる（repository の業務判定用）
 - `Raw()` / `Exec()` の生 SQL はコールバックを通らないためガード対象外
 - `AssertScopedModels(exceptions, models...)` を起動時に呼ぶと「tenant_id カラムがあるのにマーカー未実装」を検出できる（マーカー付け忘れ対策）
 
@@ -68,7 +67,7 @@ err := gw_gorm.WithTx(ctx, defaultDB, func(tx *gorm.DB) error {
 })
 ```
 
-- `WithScopeContext` と `ScopeFromContext` はScopeを複製し、外部からのslice変更による認可範囲の変化を防ぐ
+- `WithScopeContext` はScopeを複製して保存し、外部からのslice変更による認可範囲の変化を防ぐ。取得処理はTenant Guard内部に限定する
 - `AttachScope` は `Context()` / `SetContext()` を持つ `gw_web.WebCtx` などへ、Web frameworkへの直接依存なしでScopeを設定する
 - Scopeの保存場所は `context.Context` の1箇所だけで、Tenant GuardはGORMの `Statement.Context` から取得する
 - 明示DBと既定DBの選択はアプリケーション側の責務。transactionなどの明示DBにはcontextを再設定しない

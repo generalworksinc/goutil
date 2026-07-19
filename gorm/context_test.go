@@ -17,12 +17,12 @@ func TestScopeContextCopiesScope(t *testing.T) {
 	scope.TenantIds[0] = "changed-tenant"
 	scope.OrgIds[0] = "changed-org"
 
-	actual, ok := ScopeFromContext(ctx)
+	actual, ok := scopeFromContext(ctx)
 	if !ok || !actual.CanSeeTenant("tenant-a") || !actual.CanSeeOrg("org-a") {
 		t.Fatalf("scope=%+v ok=%v", actual, ok)
 	}
 	actual.TenantIds[0] = "mutated-return-value"
-	again, ok := ScopeFromContext(ctx)
+	again, ok := scopeFromContext(ctx)
 	if !ok || !again.CanSeeTenant("tenant-a") {
 		t.Fatalf("stored scope was mutated through return value: %+v", again)
 	}
@@ -33,10 +33,10 @@ func TestScopeContextHandlesNilInputs(t *testing.T) {
 	if ctx == nil {
 		t.Fatal("nil context must be normalized")
 	}
-	if scope, ok := ScopeFromContext(ctx); ok || scope != nil {
+	if scope, ok := scopeFromContext(ctx); ok || scope != nil {
 		t.Fatalf("scope=%+v ok=%v", scope, ok)
 	}
-	if scope, ok := ScopeFromContext(nil); ok || scope != nil {
+	if scope, ok := scopeFromContext(nil); ok || scope != nil {
 		t.Fatalf("nil context scope=%+v ok=%v", scope, ok)
 	}
 }
@@ -51,7 +51,7 @@ func (c *testContextCarrier) SetContext(ctx context.Context) { c.ctx = ctx }
 func TestAttachScopeSupportsContextCarrier(t *testing.T) {
 	carrier := &testContextCarrier{ctx: context.Background()}
 	AttachScope(carrier, singleScope())
-	actual, ok := ScopeFromContext(carrier.Context())
+	actual, ok := scopeFromContext(carrier.Context())
 	if !ok || !actual.CanSeeTenant("t1") || !actual.CanSeeOrg("o1") {
 		t.Fatalf("scope=%+v ok=%v", actual, ok)
 	}
@@ -72,7 +72,7 @@ func TestWithTxPreservesScope(t *testing.T) {
 	db := openTransactionTestDB(t)
 	ctx := WithScopeContext(context.Background(), singleScope())
 	err := WithTx(ctx, db, func(tx *gorm.DB) error {
-		actual, ok := ScopeFrom(tx)
+		actual, ok := scopeFrom(tx)
 		if !ok || !actual.CanSeeTenant("t1") || !actual.CanSeeOrg("o1") {
 			t.Fatalf("transaction scope=%+v ok=%v", actual, ok)
 		}

@@ -31,8 +31,9 @@ func WithScopeContext(ctx context.Context, scope *Scope) context.Context {
 	return context.WithValue(ctx, scopeContextKey{}, cloneScope(scope))
 }
 
-// ScopeFromContextは、WithScopeContextで保存したScopeを返します。
-func ScopeFromContext(ctx context.Context) (*Scope, bool) {
+// scopeFromContextは、WithScopeContextで保存したScopeをTenant Guard内部へ返します。
+// Scopeは認可の適用機構が利用する情報であり、ControllerやRepositoryへ公開しません。
+func scopeFromContext(ctx context.Context) (*Scope, bool) {
 	if ctx == nil {
 		return nil, false
 	}
