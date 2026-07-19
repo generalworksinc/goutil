@@ -41,36 +41,21 @@ func TestScopeContextHandlesNilInputs(t *testing.T) {
 	}
 }
 
-func TestPickConnectionIfEmptyAppliesContextScopeToDefaultDB(t *testing.T) {
-	db := openTestDB(t)
-	ctx := WithScopeContext(context.Background(), singleScope())
-	selected := PickConnectionIfEmpty(ctx, nil, db)
-	if selected == nil {
-		t.Fatal("default database was not selected")
-	}
-	actual, ok := ScopeFrom(selected)
+type testContextCarrier struct {
+	ctx context.Context
+}
+
+func (c *testContextCarrier) Context() context.Context       { return c.ctx }
+func (c *testContextCarrier) SetContext(ctx context.Context) { c.ctx = ctx }
+
+func TestAttachScopeSupportsContextCarrier(t *testing.T) {
+	carrier := &testContextCarrier{ctx: context.Background()}
+	AttachScope(carrier, singleScope())
+	actual, ok := ScopeFromContext(carrier.Context())
 	if !ok || !actual.CanSeeTenant("t1") || !actual.CanSeeOrg("o1") {
 		t.Fatalf("scope=%+v ok=%v", actual, ok)
 	}
-	if selected.Statement.Context != ctx {
-		t.Fatal("request context was not attached to the selected database")
-	}
-}
-
-func TestPickConnectionIfEmptyPrefersExplicitDB(t *testing.T) {
-	defaultDB := openTestDB(t)
-	explicitDB := openTestDB(t)
-	ctx := WithScopeContext(context.Background(), singleScope())
-	selected := PickConnectionIfEmpty(ctx, explicitDB, defaultDB)
-	if selected == nil {
-		t.Fatal("explicit database was not selected")
-	}
-	if _, ok := ScopeFrom(selected); ok {
-		t.Fatal("explicit database must not be re-scoped implicitly")
-	}
-	if selected.Statement.Context != ctx {
-		t.Fatal("request context was not attached to the explicit database")
-	}
+	AttachScope(nil, singleScope())
 }
 
 func TestWithTxFailsClosedWithoutScope(t *testing.T) {
@@ -105,9 +90,9 @@ func TestWithTxPreservesScope(t *testing.T) {
 	}
 }
 
-func TestWithTxValidatesDefaultDBAndPropagatesCallbackError(t *testing.T) {
-	if err := WithTx(context.Background(), nil, func(*gorm.DB) error { return nil }); !errors.Is(err, ErrDefaultDBRequired) {
-		t.Fatalf("expected ErrDefaultDBRequired, got %v", err)
+func TestWithTxValidatesDBAndPropagatesCallbackError(t *testing.T) {
+	if err := WithTx(context.Background(), nil, func(*gorm.DB) error { return nil }); !errors.Is(err, ErrDBRequired) {
+		t.Fatalf("expected ErrDBRequired, got %v", err)
 	}
 
 	db := openTransactionTestDB(t)

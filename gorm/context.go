@@ -9,8 +9,15 @@ import (
 
 type scopeContextKey struct{}
 
-// ErrDefaultDBRequiredは、明示DBと既定DBの両方が指定されていない場合に返します。
-var ErrDefaultDBRequired = errors.New("default database is required")
+// ErrDBRequiredは、transaction対象のDBが指定されていない場合に返します。
+var ErrDBRequired = errors.New("database is required")
+
+// ContextCarrierは、context.Contextを保持するHTTP contextなどの最小インターフェースです。
+// gw_gormは特定のWebフレームワークへ依存せず、gw_web.WebCtxなどがこの条件を満たします。
+type ContextCarrier interface {
+	Context() context.Context
+	SetContext(context.Context)
+}
 
 // WithScopeContextは、認証・認可で確定したScopeをcontextへ保存します。
 // 呼び出し後に元のScopeが変更されても影響を受けないよう、値を複製して保存します。
@@ -36,46 +43,33 @@ func ScopeFromContext(ctx context.Context) (*Scope, bool) {
 	return cloneScope(scope), true
 }
 
-// PickConnectionIfEmptyは、明示DBがあればそれを優先し、なければ既定DBを選択します。
-// 既定DBを使う場合はcontext内のScopeをGORMセッションへ適用します。
-// Scopeがなければ通常の既定DBを返し、ガード対象モデルの可否はUseTenantGuardが
-// fail-closedで判断します。
-func PickConnectionIfEmpty(ctx context.Context, dbAccess, defaultDB *gorm.DB) *gorm.DB {
-	if dbAccess != nil {
-		if ctx != nil {
-			return dbAccess.WithContext(ctx)
-		}
-		return dbAccess
+// AttachScopeは、認証済みScopeをHTTP contextなどが保持するcontext.Contextへ設定します。
+func AttachScope(target ContextCarrier, scope *Scope) {
+	if target == nil {
+		return
 	}
-	if defaultDB == nil {
-		return nil
-	}
-	if scope, ok := ScopeFromContext(ctx); ok {
-		db := WithScope(defaultDB, scope)
-		if ctx != nil {
-			db = db.WithContext(ctx)
-		}
-		return db
-	}
-	if ctx != nil {
-		return defaultDB.WithContext(ctx)
-	}
-	return defaultDB
+	target.SetContext(WithScopeContext(target.Context(), scope))
 }
 
-// WithTxは、context内のScopeを維持した既定DBからtransactionを開始します。
+// WithTxは、渡されたDBへcontextを一度だけ設定してtransactionを開始します。
 // Scopeがなくてもtransaction自体は開始できますが、ガード対象モデルへの操作は
 // UseTenantGuardによって拒否されます。全テナント操作では、呼び出し側が明示的に
 // AllTenantsまたはWithoutTenantScopeを指定したDBを利用してください。
-func WithTx(ctx context.Context, defaultDB *gorm.DB, fn func(*gorm.DB) error) error {
-	if defaultDB == nil {
-		return ErrDefaultDBRequired
+func WithTx(ctx context.Context, db *gorm.DB, fn func(*gorm.DB) error) error {
+	if db == nil {
+		return ErrDBRequired
 	}
-	if ctx == nil {
-		ctx = context.Background()
+	if ctx != nil {
+		db = db.WithContext(ctx)
 	}
-	db := PickConnectionIfEmpty(ctx, nil, defaultDB)
 	return db.Transaction(fn)
+}
+
+func contextFromDB(db *gorm.DB) context.Context {
+	if db != nil && db.Statement != nil && db.Statement.Context != nil {
+		return db.Statement.Context
+	}
+	return context.Background()
 }
 
 func cloneScope(scope *Scope) *Scope {

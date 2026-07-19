@@ -12,16 +12,13 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-const (
-	tenantScopeKey     = "gw_gorm:tenant_scope"
-	tenantScopeSkipKey = "gw_gorm:tenant_scope_skip"
-)
+const tenantScopeSkipKey = "gw_gorm:tenant_scope_skip"
 
 // Scope はテナント境界と参照可能 organization を表す。
-// - TenantIds: 参照可能テナント。通常ユーザーは所属テナントの1件。複数テナント権限者はN件
-// - OrgIds: 参照可能 organization。nil/空 = 何も見えない
-// - AllTenants: システム管理者用。テナント/organization 条件の注入を全てスキップする（RLS の BYPASSRLS 相当）。
-//   これを true にしてよいのはアプリのスコープ解決処理（Role 判定）1箇所のみ、という規約で運用すること
+//   - TenantIds: 参照可能テナント。通常ユーザーは所属テナントの1件。複数テナント権限者はN件
+//   - OrgIds: 参照可能 organization。nil/空 = 何も見えない
+//   - AllTenants: システム管理者用。テナント/organization 条件の注入を全てスキップする（RLS の BYPASSRLS 相当）。
+//     これを true にしてよいのはアプリのスコープ解決処理（Role 判定）1箇所のみ、という規約で運用すること
 type Scope struct {
 	TenantIds  []string
 	OrgIds     []string
@@ -68,12 +65,13 @@ type TenantScopedModel interface{ TenantScoped() }
 type OrgScopedModel interface{ OrgScoped() }
 type OrgSelfScopedModel interface{ OrgSelfScoped() }
 
-// WithScope は GORM セッションにテナントスコープを載せる。
+// WithScope はDBのcontext.Contextへテナントスコープを載せる。
 // Raw()/Exec() の生 SQL は GORM コールバックを通らないため、このガードの対象外。
 // 返り値は Session() 済みの「再利用可能な起点」。変数に取って複数クエリに使い回しても、
-// finisher 実行後の条件が次のクエリへ残留しない（スコープは Statement 複製時に伝搬する）。
+// finisher 実行後の条件が次のクエリへ残留しない。Scopeの正本はcontext.Contextだけに置く。
 func WithScope(db *gorm.DB, scope *Scope) *gorm.DB {
-	return db.Set(tenantScopeKey, scope).Session(&gorm.Session{})
+	ctx := WithScopeContext(contextFromDB(db), scope)
+	return db.WithContext(ctx).Session(&gorm.Session{})
 }
 
 // WithoutTenantScope はスコープ解決処理・管理バッチ・シードなどで明示的にガードを外す。
@@ -86,7 +84,7 @@ func WithoutTenantScope(db *gorm.DB) *gorm.DB {
 // ScopeFrom は WithScope でセッションに載せたスコープを取り出す。
 // repository が業務判定（CanSeeOrg 等）にスコープの中身を使いたい場合に、引数で別途受け取らずに済む。
 func ScopeFrom(db *gorm.DB) (*Scope, bool) {
-	return getScope(db)
+	return ScopeFromContext(contextFromDB(db))
 }
 
 // UseTenantGuard は TenantScopedModel/OrgScopedModel/OrgSelfScopedModel への GORM 操作にスコープ条件を強制する。
@@ -244,12 +242,7 @@ func AssertScopedModels(exceptions []any, models ...any) error {
 }
 
 func getScope(db *gorm.DB) (*Scope, bool) {
-	v, ok := db.Get(tenantScopeKey)
-	if !ok {
-		return nil, false
-	}
-	scope, ok := v.(*Scope)
-	return scope, ok
+	return ScopeFrom(db)
 }
 
 func shouldSkip(db *gorm.DB) bool {

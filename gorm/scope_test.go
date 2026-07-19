@@ -24,7 +24,7 @@ type guardedOrganization struct {
 	Name     string
 }
 
-func (guardedOrganization) TenantScoped() {}
+func (guardedOrganization) TenantScoped()  {}
 func (guardedOrganization) OrgSelfScoped() {}
 
 type plainUser struct {
@@ -32,6 +32,19 @@ type plainUser struct {
 	TenantId string
 	Email    string
 }
+
+type plainNote struct {
+	Id   string
+	Text string
+}
+
+type tenantOnlyRecord struct {
+	Id       string
+	TenantId string
+	Name     string
+}
+
+func (tenantOnlyRecord) TenantScoped() {}
 
 // DryRun + DummyDialector で SQL 組み立てのみ検証する（実 DB 不要）。
 func openTestDB(t *testing.T) *gorm.DB {
@@ -137,6 +150,43 @@ func TestGuardRejectsWithoutScope(t *testing.T) {
 	tx := db.Find(&list)
 	if tx.Error == nil || !strings.Contains(tx.Error.Error(), "tenant scope is required") {
 		t.Fatalf("expected 'tenant scope is required', got %v", tx.Error)
+	}
+}
+
+// Scopeを導入しないモデルは、Tenant Guardを登録したDBでも通常どおり利用できる。
+func TestGuardAllowsUnscopedModelWithoutScope(t *testing.T) {
+	db := openTestDB(t)
+	var list []plainNote
+	tx := db.Find(&list)
+	if tx.Error != nil {
+		t.Fatalf("unscoped model must work without scope: %v", tx.Error)
+	}
+	if sql := tx.Statement.SQL.String(); strings.Contains(sql, "tenant_id") || strings.Contains(sql, "organization_id") {
+		t.Fatalf("unscoped model must not receive scope conditions: %s", sql)
+	}
+}
+
+// Tenantだけを採用するアプリではOrgIdsを設定せず、TenantScopedだけで利用できる。
+func TestTenantOnlyModelDoesNotRequireOrganizationScope(t *testing.T) {
+	db := openTestDB(t)
+	scoped := WithScope(db, &Scope{TenantIds: []string{"t1"}})
+	var list []tenantOnlyRecord
+	tx := scoped.Find(&list)
+	if tx.Error != nil {
+		t.Fatalf("tenant-only query: %v", tx.Error)
+	}
+	sql := tx.Statement.SQL.String()
+	if !strings.Contains(sql, "tenant_id") || strings.Contains(sql, "organization_id") {
+		t.Fatalf("tenant-only query has unexpected conditions: %s", sql)
+	}
+
+	row := &tenantOnlyRecord{Id: "id-1", Name: "example"}
+	tx = scoped.Create(row)
+	if tx.Error != nil {
+		t.Fatalf("tenant-only create: %v", tx.Error)
+	}
+	if row.TenantId != "t1" {
+		t.Fatalf("tenant_id must be auto-set, got %q", row.TenantId)
 	}
 }
 
@@ -276,7 +326,7 @@ func TestCreateRequiresExplicitTenantWhenAmbiguous(t *testing.T) {
 
 // AssertScopedModels: マーカー付け忘れ（tenant_id あり・宣言なし）を検出し、例外指定でスキップできる。
 func TestAssertScopedModels(t *testing.T) {
-	if err := AssertScopedModels(nil, &guardedTodo{}, &guardedOrganization{}); err != nil {
+	if err := AssertScopedModels(nil, &guardedTodo{}, &guardedOrganization{}, &tenantOnlyRecord{}); err != nil {
 		t.Fatalf("valid models must pass: %v", err)
 	}
 	err := AssertScopedModels(nil, &guardedTodo{}, &plainUser{})
