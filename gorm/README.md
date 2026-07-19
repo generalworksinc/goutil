@@ -41,14 +41,17 @@ UUID/ULID は **Id が空のときだけ** BeforeCreate フックで自動セッ
 
 ```go
 gw_gorm.UseTenantGuard(db)                          // 起動時に1回登録
-scoped := gw_gorm.WithScope(db, &gw_gorm.Scope{...}) // リクエスト毎にスコープを載せる（返り値は再利用可能な起点）
+scoped := gw_gorm.ApplyScope(db, &gw_gorm.Scope{...}) // リクエスト毎にスコープを載せる（返り値は再利用可能な起点）
 ```
 
 - `Scope{TenantIds, OrgIds, AllTenants}`。`AllTenants` はシステム管理者用の全条件スキップ（BYPASSRLS 相当）
 - スコープ未設定でガード対象モデルに触ると `tenant scope is required` で**拒否される（fail-closed）**
 - Create は TenantIds が1件なら tenant_id を自動セット。複数/AllTenants は明示必須。organization_id はスコープ内検証
-- `WithoutTenantScope(db)` はスコープ解決・シード・管理バッチ等の明示的なガード除外（使用箇所は grep で監査可能に保つ）
-- `Raw()` / `Exec()` の生 SQL はコールバックを通らないためガード対象外
+- Update は対象行をScopeで絞り、tenant_id / organization_idの変更先もScope内であることを検証
+- 条件なしUpdate/Deleteは、Guardが条件を追加してもGORMの`ErrMissingWhereClause`で拒否
+- `BypassTenantGuard(db)` はスコープ解決・シード・管理バッチ等の明示的なガード除外（使用箇所は grep で監査可能に保つ）
+- `ApplyScope`と`BypassTenantGuard`は後勝ち。最後に呼んだ設定を最終状態とする
+- `Raw()` / `Exec()`の生SQLと、Schemaを持たない`Table()` + map/primitive結果はコールバックによるGuard対象外
 - `AssertScopedModels(exceptions, models...)` を起動時に呼ぶと「tenant_id カラムがあるのにマーカー未実装」を検出できる（マーカー付け忘れ対策）
 
 ## contextとtransactionへのScope伝搬
@@ -62,7 +65,7 @@ ctx = gw_gorm.WithScopeContext(ctx, &gw_gorm.Scope{
 })
 
 db := defaultDB.WithContext(ctx)
-err := gw_gorm.WithTx(ctx, defaultDB, func(tx *gorm.DB) error {
+err := db.Transaction(func(tx *gorm.DB) error {
     return tx.Create(&row).Error
 })
 ```
@@ -71,9 +74,9 @@ err := gw_gorm.WithTx(ctx, defaultDB, func(tx *gorm.DB) error {
 - `AttachScope` は `Context()` / `SetContext()` を持つ `gw_web.WebCtx` などへ、Web frameworkへの直接依存なしでScopeを設定する
 - Scopeの保存場所は `context.Context` の1箇所だけで、Tenant GuardはGORMの `Statement.Context` から取得する
 - 明示DBと既定DBの選択はアプリケーション側の責務。transactionなどの明示DBにはcontextを再設定しない
-- `WithTx` は渡されたDBへcontextを一度設定してtransactionを開始する。Scopeなしでも開始自体は許可するが、ガード対象操作はfail-closedになる
+- transaction wrapperが必要ならアプリケーション側に置き、既定DBへcontextを設定して`Transaction`を呼ぶ
 - Scopeを使わないアプリはマーカーを実装せず、Tenantだけを使うアプリは `TenantScoped()` と `TenantIds` だけを利用できる
-- `Raw()` / `Exec()` はtransaction内でもTenant Guard対象外なので、ユーザー入力に基づく処理では使用しない
+- `Raw()` / `Exec()` / Schemaなし`Table()`はtransaction内でもTenant Guard対象外なので、利用箇所をgrep・レビューで監査する
 
 ## FindOne — 「不在はエラーではない」検索
 

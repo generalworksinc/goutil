@@ -58,9 +58,9 @@ func TestAttachScopeSupportsContextCarrier(t *testing.T) {
 	AttachScope(nil, singleScope())
 }
 
-func TestWithTxFailsClosedWithoutScope(t *testing.T) {
+func TestTransactionFailsClosedWithoutScope(t *testing.T) {
 	db := openTransactionTestDB(t)
-	err := WithTx(context.Background(), db, func(tx *gorm.DB) error {
+	err := db.WithContext(context.Background()).Transaction(func(tx *gorm.DB) error {
 		return tx.Create(&guardedTodo{Id: "without-scope", TenantId: "t1", OrganizationId: "o1"}).Error
 	})
 	if err == nil || !strings.Contains(err.Error(), "tenant scope is required") {
@@ -68,10 +68,10 @@ func TestWithTxFailsClosedWithoutScope(t *testing.T) {
 	}
 }
 
-func TestWithTxPreservesScope(t *testing.T) {
+func TestTransactionPreservesScope(t *testing.T) {
 	db := openTransactionTestDB(t)
 	ctx := WithScopeContext(context.Background(), singleScope())
-	err := WithTx(ctx, db, func(tx *gorm.DB) error {
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		actual, ok := scopeFrom(tx)
 		if !ok || !actual.CanSeeTenant("t1") || !actual.CanSeeOrg("o1") {
 			t.Fatalf("transaction scope=%+v ok=%v", actual, ok)
@@ -82,7 +82,7 @@ func TestWithTxPreservesScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int64
-	if err := WithScope(db, singleScope()).Model(&guardedTodo{}).Where("id = ?", "with-scope").Count(&count).Error; err != nil {
+	if err := ApplyScope(db, singleScope()).Model(&guardedTodo{}).Where("id = ?", "with-scope").Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
@@ -90,15 +90,11 @@ func TestWithTxPreservesScope(t *testing.T) {
 	}
 }
 
-func TestWithTxValidatesDBAndPropagatesCallbackError(t *testing.T) {
-	if err := WithTx(context.Background(), nil, func(*gorm.DB) error { return nil }); !errors.Is(err, ErrDBRequired) {
-		t.Fatalf("expected ErrDBRequired, got %v", err)
-	}
-
+func TestTransactionPropagatesCallbackError(t *testing.T) {
 	db := openTransactionTestDB(t)
 	want := errors.New("callback failed")
 	ctx := WithScopeContext(context.Background(), singleScope())
-	err := WithTx(ctx, db, func(tx *gorm.DB) error {
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&guardedTodo{Id: "rolled-back", TenantId: "t1", OrganizationId: "o1"}).Error; err != nil {
 			return err
 		}
@@ -108,7 +104,7 @@ func TestWithTxValidatesDBAndPropagatesCallbackError(t *testing.T) {
 		t.Fatalf("callback error=%v", err)
 	}
 	var count int64
-	if err := WithScope(db, singleScope()).Model(&guardedTodo{}).Where("id = ?", "rolled-back").Count(&count).Error; err != nil {
+	if err := ApplyScope(db, singleScope()).Model(&guardedTodo{}).Where("id = ?", "rolled-back").Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {

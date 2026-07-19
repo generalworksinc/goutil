@@ -10,7 +10,7 @@ import (
 // ヒット時の挙動（RowsAffected>0 で実体が返る）は実DBを使うテンプレートのE2Eで担保する。
 func TestFindOneNotFoundIsNotError(t *testing.T) {
 	db := openTestDB(t)
-	scoped := WithScope(db, singleScope())
+	scoped := ApplyScope(db, singleScope())
 
 	got, err := FindOne[guardedTodo](scoped.Where("id = ?", "missing"))
 	if err != nil {

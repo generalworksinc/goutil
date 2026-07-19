@@ -1,6 +1,7 @@
 package gw_gorm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -65,19 +66,19 @@ type TenantScopedModel interface{ TenantScoped() }
 type OrgScopedModel interface{ OrgScoped() }
 type OrgSelfScopedModel interface{ OrgSelfScoped() }
 
-// WithScope はDBのcontext.Contextへテナントスコープを載せる。
+// ApplyScope はDBのcontext.Contextへテナントスコープを載せ、先行するGuard解除を取り消す。
 // Raw()/Exec() の生 SQL は GORM コールバックを通らないため、このガードの対象外。
 // 返り値は Session() 済みの「再利用可能な起点」。変数に取って複数クエリに使い回しても、
 // finisher 実行後の条件が次のクエリへ残留しない。Scopeの正本はcontext.Contextだけに置く。
-func WithScope(db *gorm.DB, scope *Scope) *gorm.DB {
+func ApplyScope(db *gorm.DB, scope *Scope) *gorm.DB {
 	ctx := WithScopeContext(contextFromDB(db), scope)
-	return db.WithContext(ctx).Session(&gorm.Session{})
+	return db.Set(tenantScopeSkipKey, false).WithContext(ctx).Session(&gorm.Session{})
 }
 
-// WithoutTenantScope はスコープ解決処理・管理バッチ・シードなどで明示的にガードを外す。
+// BypassTenantGuard はスコープ解決処理・管理バッチ・シードなどで明示的にガードを外す。
 // Raw()/Exec() の生 SQL は GORM コールバックを通らないため、このガードの対象外。
-// WithScope と同様、返り値は再利用可能な起点として扱える。
-func WithoutTenantScope(db *gorm.DB) *gorm.DB {
+// ApplyScope と同様、返り値は再利用可能な起点として扱え、後から呼んだ設定を有効とする。
+func BypassTenantGuard(db *gorm.DB) *gorm.DB {
 	return db.Set(tenantScopeSkipKey, true).Session(&gorm.Session{})
 }
 
@@ -90,12 +91,12 @@ func UseTenantGuard(db *gorm.DB) error {
 		}
 	}
 	if db.Callback().Update().Get("gw_gorm:tenant_guard_update") == nil {
-		if err := db.Callback().Update().Before("gorm:update").Register("gw_gorm:tenant_guard_update", tenantGuardQuery); err != nil {
+		if err := db.Callback().Update().Before("gorm:update").Register("gw_gorm:tenant_guard_update", tenantGuardUpdate); err != nil {
 			return err
 		}
 	}
 	if db.Callback().Delete().Get("gw_gorm:tenant_guard_delete") == nil {
-		if err := db.Callback().Delete().Before("gorm:delete").Register("gw_gorm:tenant_guard_delete", tenantGuardQuery); err != nil {
+		if err := db.Callback().Delete().Before("gorm:delete").Register("gw_gorm:tenant_guard_delete", tenantGuardDelete); err != nil {
 			return err
 		}
 	}
@@ -110,6 +111,162 @@ func UseTenantGuard(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+func tenantGuardUpdate(db *gorm.DB) {
+	hasCallerCondition := db.Statement != nil && hasMutationCallerCondition(db.Statement)
+	tenantGuardQuery(db)
+	if db.Error != nil || shouldSkip(db) || db.Statement == nil || db.Statement.Schema == nil {
+		return
+	}
+	stmt := db.Statement
+	if !db.AllowGlobalUpdate && !hasCallerCondition {
+		stmt.AddError(gorm.ErrMissingWhereClause)
+		return
+	}
+	scope, ok := getScope(db)
+	if !ok || scope == nil {
+		return
+	}
+	if implementsTenantScoped(stmt.Schema) {
+		if value, assigned := protectedUpdateAssignment(stmt, "tenant_id"); assigned {
+			id, valid := stringAssignment(value)
+			if !valid || !scope.CanSeeTenant(id) {
+				stmt.AddError(errors.New("tenant is out of scope"))
+				return
+			}
+		}
+	}
+	if implementsOrgScoped(stmt.Schema) {
+		if value, assigned := protectedUpdateAssignment(stmt, "organization_id"); assigned {
+			id, valid := stringAssignment(value)
+			if !valid || !scope.CanSeeOrg(id) {
+				stmt.AddError(errors.New("organization is out of scope"))
+			}
+		}
+	}
+}
+
+func tenantGuardDelete(db *gorm.DB) {
+	if shouldSkip(db) || db.Statement == nil || db.Statement.Schema == nil {
+		return
+	}
+	stmt := db.Statement
+	guarded := implementsTenantScoped(stmt.Schema) || implementsOrgScoped(stmt.Schema) || implementsOrgSelfScoped(stmt.Schema)
+	if !guarded {
+		return
+	}
+	hasCallerCondition := hasMutationCallerCondition(stmt)
+	tenantGuardQuery(db)
+	if db.Error == nil && !db.AllowGlobalUpdate && !hasCallerCondition {
+		stmt.AddError(gorm.ErrMissingWhereClause)
+	}
+}
+
+func protectedUpdateAssignment(stmt *gorm.Statement, dbName string) (any, bool) {
+	if stmt == nil || stmt.Schema == nil {
+		return nil, false
+	}
+	if setClause, ok := stmt.Clauses["SET"]; ok {
+		if assignments, ok := setClause.Expression.(clause.Set); ok {
+			for _, assignment := range assignments {
+				if assignment.Column.Name == dbName {
+					return assignment.Value, true
+				}
+			}
+		}
+	}
+
+	selected, restricted := stmt.SelectAndOmitColumns(false, true)
+	isSelected := func(column string) bool {
+		value, ok := selected[column]
+		return (ok && value) || (!ok && !restricted)
+	}
+
+	if values, ok := stmt.Dest.(map[string]interface{}); ok {
+		for key, value := range values {
+			column := key
+			if field := stmt.Schema.LookUpField(key); field != nil && field.DBName != "" {
+				column = field.DBName
+			}
+			if column == dbName && isSelected(column) {
+				return value, true
+			}
+		}
+		return nil, false
+	}
+
+	value := reflect.ValueOf(stmt.Dest)
+	for value.IsValid() && (value.Kind() == reflect.Ptr || value.Kind() == reflect.Interface) {
+		if value.IsNil() {
+			return nil, false
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() || value.Kind() != reflect.Struct {
+		return nil, false
+	}
+
+	updateSchema := stmt.Schema
+	candidate := &gorm.Statement{DB: stmt.DB}
+	if err := candidate.Parse(stmt.Dest); err == nil && candidate.Schema != nil {
+		updateSchema = candidate.Schema
+	}
+	field := updateSchema.LookUpField(dbName)
+	if field == nil || !field.Updatable || !isSelected(dbName) {
+		return nil, false
+	}
+	fieldValue, isZero := field.ValueOf(stmt.Context, value)
+	if _, explicitlySelected := selected[dbName]; explicitlySelected || !isZero {
+		return fieldValue, true
+	}
+	return nil, false
+}
+
+func stringAssignment(value any) (string, bool) {
+	if value == nil {
+		return "", false
+	}
+	rv := reflect.ValueOf(value)
+	for rv.IsValid() && (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) {
+		if rv.IsNil() {
+			return "", false
+		}
+		rv = rv.Elem()
+	}
+	if !rv.IsValid() || rv.Kind() != reflect.String {
+		return "", false
+	}
+	return rv.String(), true
+}
+
+func hasMutationCallerCondition(stmt *gorm.Statement) bool {
+	if stmt == nil {
+		return false
+	}
+	if where, ok := stmt.Clauses["WHERE"]; ok {
+		if expression, ok := where.Expression.(clause.Where); !ok || len(expression.Exprs) > 0 {
+			return true
+		}
+	}
+	if stmt.Schema == nil || len(stmt.Schema.PrimaryFields) == 0 {
+		return false
+	}
+	if hasPrimaryIdentity(stmt.Context, stmt.ReflectValue, stmt.Schema.PrimaryFields) {
+		return true
+	}
+	if stmt.Model != nil {
+		return hasPrimaryIdentity(stmt.Context, reflect.ValueOf(stmt.Model), stmt.Schema.PrimaryFields)
+	}
+	return false
+}
+
+func hasPrimaryIdentity(ctx context.Context, value reflect.Value, fields []*schema.Field) bool {
+	if !value.IsValid() {
+		return false
+	}
+	_, values := schema.GetIdentityFieldValuesMap(ctx, value, fields)
+	return len(values) > 0
 }
 
 func tenantGuardQuery(db *gorm.DB) {
