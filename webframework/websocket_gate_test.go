@@ -148,6 +148,38 @@ func TestWebAppShutdownMethodsCloseTrackedWebSockets(t *testing.T) {
 	}
 }
 
+func TestShutdownWithContextStopsWaitingAtDeadline(t *testing.T) {
+	app := newWebSocketGateTestApp()
+	connected := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	handlerStopped := make(chan struct{})
+	app.WsGet("/ws", func(*WebSocketConn) {
+		close(connected)
+		<-releaseHandler
+		close(handlerStopped)
+	})
+	address := startWebSocketGateTestServer(t, app)
+	conn := dialWebSocketGateTest(t, "ws://"+address+"/ws")
+	defer conn.Close()
+	select {
+	case <-connected:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WebSocket handler did not start")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := app.ShutdownWithContext(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("shutdown error=%v, want=%v", err, context.DeadlineExceeded)
+	}
+	close(releaseHandler)
+	select {
+	case <-handlerStopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WebSocket handler did not stop after release")
+	}
+}
+
 func assertWebSocketGateConnectionClosed(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))

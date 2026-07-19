@@ -297,17 +297,28 @@ func (app WebApp) Listen(addr string) error {
 	return a.Listen(addr)
 }
 func (app WebApp) ShutdownWithTimeout(duration time.Duration) error {
-	app.webSockets.closeAll()
-	a := app.App.(*fiber.App)
-	return a.ShutdownWithTimeout(duration)
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+	return app.ShutdownWithContext(ctx)
 }
 func (app WebApp) ShutdownWithContext(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	app.webSockets.closeAll()
+	waitErr := app.webSockets.wait(ctx)
 	a := app.App.(*fiber.App)
-	return a.ShutdownWithContext(ctx)
+	shutdownErr := a.ShutdownWithContext(ctx)
+	if waitErr != nil {
+		return waitErr
+	}
+	return shutdownErr
 }
 func (app WebApp) Shutdown() error {
 	app.webSockets.closeAll()
+	if err := app.webSockets.wait(nil); err != nil {
+		return err
+	}
 	a := app.App.(*fiber.App)
 	return a.Shutdown()
 }

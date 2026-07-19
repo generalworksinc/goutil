@@ -1,6 +1,7 @@
 package gw_web
 
 import (
+	"context"
 	"net/http"
 	"sync"
 )
@@ -10,6 +11,8 @@ type webSocketGate struct {
 	mu          sync.Mutex
 	accepting   bool
 	connections map[*trackedWebSocket]struct{}
+	drained     chan struct{}
+	drainOnce   sync.Once
 }
 
 // trackedWebSocketはcloseとhandler終了を直列化し、frameworkのconnection pool返却と競合させません。
@@ -22,6 +25,7 @@ func newWebSocketGate() *webSocketGate {
 	return &webSocketGate{
 		accepting:   true,
 		connections: make(map[*trackedWebSocket]struct{}),
+		drained:     make(chan struct{}),
 	}
 }
 
@@ -69,6 +73,7 @@ func (g *webSocketGate) add(conn *trackedWebSocket) bool {
 func (g *webSocketGate) remove(conn *trackedWebSocket) {
 	g.mu.Lock()
 	delete(g.connections, conn)
+	g.closeDrainedIfEmpty()
 	g.mu.Unlock()
 }
 
@@ -82,6 +87,7 @@ func (g *webSocketGate) closeAll() {
 	for conn := range g.connections {
 		connections = append(connections, conn)
 	}
+	g.closeDrainedIfEmpty()
 	g.mu.Unlock()
 
 	for _, tracked := range connections {
@@ -90,5 +96,29 @@ func (g *webSocketGate) closeAll() {
 			_ = tracked.conn.Close()
 		}
 		tracked.mu.Unlock()
+	}
+}
+
+// waitは追跡中のWebSocket handlerがすべて終了するまで待機します。
+func (g *webSocketGate) wait(ctx context.Context) error {
+	if g == nil {
+		return nil
+	}
+	if ctx == nil {
+		<-g.drained
+		return nil
+	}
+	select {
+	case <-g.drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// closeDrainedIfEmptyはg.muを保持した状態で呼び出します。
+func (g *webSocketGate) closeDrainedIfEmpty() {
+	if !g.accepting && len(g.connections) == 0 {
+		g.drainOnce.Do(func() { close(g.drained) })
 	}
 }
