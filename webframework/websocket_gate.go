@@ -10,21 +10,15 @@ import (
 type webSocketGate struct {
 	mu          sync.Mutex
 	accepting   bool
-	connections map[*trackedWebSocket]struct{}
+	connections map[*WebSocketConn]struct{}
 	drained     chan struct{}
 	drainOnce   sync.Once
-}
-
-// trackedWebSocketはcloseとhandler終了を直列化し、frameworkのconnection pool返却と競合させません。
-type trackedWebSocket struct {
-	mu   sync.Mutex
-	conn *WebSocketConn
 }
 
 func newWebSocketGate() *webSocketGate {
 	return &webSocketGate{
 		accepting:   true,
-		connections: make(map[*trackedWebSocket]struct{}),
+		connections: make(map[*WebSocketConn]struct{}),
 		drained:     make(chan struct{}),
 	}
 }
@@ -39,17 +33,11 @@ func (g *webSocketGate) middleware(c *WebCtx) error {
 // wrapはupgrade判定直後のshutdown競合も含め、接続を自動的に追跡します。
 func (g *webSocketGate) wrap(handler WsHandler) WsHandler {
 	return func(conn *WebSocketConn) {
-		tracked := &trackedWebSocket{conn: conn}
-		if g == nil || !g.add(tracked) {
+		if g == nil || !g.add(conn) {
 			_ = conn.Close()
 			return
 		}
-		defer func() {
-			tracked.mu.Lock()
-			tracked.conn = nil
-			tracked.mu.Unlock()
-			g.remove(tracked)
-		}()
+		defer g.remove(conn)
 		handler(conn)
 	}
 }
@@ -60,7 +48,7 @@ func (g *webSocketGate) isAccepting() bool {
 	return g.accepting
 }
 
-func (g *webSocketGate) add(conn *trackedWebSocket) bool {
+func (g *webSocketGate) add(conn *WebSocketConn) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if !g.accepting {
@@ -70,11 +58,11 @@ func (g *webSocketGate) add(conn *trackedWebSocket) bool {
 	return true
 }
 
-func (g *webSocketGate) remove(conn *trackedWebSocket) {
+func (g *webSocketGate) remove(conn *WebSocketConn) {
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	delete(g.connections, conn)
-	g.closeDrainedIfEmpty()
-	g.mu.Unlock()
+	g.markDrainedIfEmpty()
 }
 
 func (g *webSocketGate) closeAll() {
@@ -82,30 +70,18 @@ func (g *webSocketGate) closeAll() {
 		return
 	}
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	g.accepting = false
-	connections := make([]*trackedWebSocket, 0, len(g.connections))
+	// removeと同じlock内でcloseし、handler終了後にpoolへ返された接続を触らないようにします。
 	for conn := range g.connections {
-		connections = append(connections, conn)
+		_ = conn.Close()
 	}
-	g.closeDrainedIfEmpty()
-	g.mu.Unlock()
-
-	for _, tracked := range connections {
-		tracked.mu.Lock()
-		if tracked.conn != nil {
-			_ = tracked.conn.Close()
-		}
-		tracked.mu.Unlock()
-	}
+	g.markDrainedIfEmpty()
 }
 
 // waitは追跡中のWebSocket handlerがすべて終了するまで待機します。
 func (g *webSocketGate) wait(ctx context.Context) error {
 	if g == nil {
-		return nil
-	}
-	if ctx == nil {
-		<-g.drained
 		return nil
 	}
 	select {
@@ -116,8 +92,8 @@ func (g *webSocketGate) wait(ctx context.Context) error {
 	}
 }
 
-// closeDrainedIfEmptyはg.muを保持した状態で呼び出します。
-func (g *webSocketGate) closeDrainedIfEmpty() {
+// markDrainedIfEmptyはg.muを保持した状態で呼び出します。
+func (g *webSocketGate) markDrainedIfEmpty() {
 	if !g.accepting && len(g.connections) == 0 {
 		g.drainOnce.Do(func() { close(g.drained) })
 	}

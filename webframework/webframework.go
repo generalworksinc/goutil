@@ -299,28 +299,25 @@ func (app WebApp) Listen(addr string) error {
 func (app WebApp) ShutdownWithTimeout(duration time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
-	return app.ShutdownWithContext(ctx)
+	return app.shutdown(ctx)
 }
 func (app WebApp) ShutdownWithContext(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	return app.shutdown(ctx)
+}
+func (app WebApp) Shutdown() error {
+	return app.shutdown(context.Background())
+}
+func (app WebApp) shutdown(ctx context.Context) error {
 	app.webSockets.closeAll()
-	waitErr := app.webSockets.wait(ctx)
 	a := app.App.(*fiber.App)
 	shutdownErr := a.ShutdownWithContext(ctx)
-	if waitErr != nil {
+	if waitErr := app.webSockets.wait(ctx); waitErr != nil {
 		return waitErr
 	}
 	return shutdownErr
-}
-func (app WebApp) Shutdown() error {
-	app.webSockets.closeAll()
-	if err := app.webSockets.wait(nil); err != nil {
-		return err
-	}
-	a := app.App.(*fiber.App)
-	return a.Shutdown()
 }
 
 // WebGroup ////////////////////////////////////////////////

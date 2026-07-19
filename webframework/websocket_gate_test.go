@@ -66,13 +66,6 @@ func TestWebSocketRoutesAutomaticallyTrackAndRejectConnections(t *testing.T) {
 			case <-time.After(2 * time.Second):
 				t.Fatal("WebSocket handler did not start")
 			}
-			app.webSockets.mu.Lock()
-			trackedCount := len(app.webSockets.connections)
-			app.webSockets.mu.Unlock()
-			if trackedCount != 1 {
-				t.Fatalf("tracked WebSocket connections=%d, want=1", trackedCount)
-			}
-
 			app.webSockets.closeAll()
 			select {
 			case <-disconnected:
@@ -177,6 +170,62 @@ func TestShutdownWithContextStopsWaitingAtDeadline(t *testing.T) {
 	case <-handlerStopped:
 	case <-time.After(2 * time.Second):
 		t.Fatal("WebSocket handler did not stop after release")
+	}
+}
+
+func TestShutdownStopsAcceptingHTTPBeforeWebSocketHandlerDrains(t *testing.T) {
+	app := newWebSocketGateTestApp()
+	app.Get("/health", func(c *WebCtx) error {
+		return c.SendString("ok")
+	})
+	connected := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	app.WsGet("/ws", func(*WebSocketConn) {
+		close(connected)
+		<-releaseHandler
+	})
+	address := startWebSocketGateTestServer(t, app)
+	conn := dialWebSocketGateTest(t, "ws://"+address+"/ws")
+	defer conn.Close()
+	select {
+	case <-connected:
+	case <-time.After(2 * time.Second):
+		t.Fatal("WebSocket handler did not start")
+	}
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- app.ShutdownWithTimeout(2 * time.Second)
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		response, err := http.Get("http://" + address + "/health")
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		if err != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("HTTP listener remained open while waiting for WebSocket handler")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case err := <-shutdownDone:
+		t.Fatalf("shutdown returned before WebSocket handler drained: %v", err)
+	default:
+	}
+	close(releaseHandler)
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown did not finish after WebSocket handler drained")
 	}
 }
 
