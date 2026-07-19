@@ -634,6 +634,18 @@ func (conn *WebSocketConn) WriteMessagePong(data []byte) error {
 	return conn.Conn.WriteMessage(websocket.PongMessage, data)
 }
 func (conn *WebSocketConn) Close() error {
+	if conn == nil || conn.Conn == nil {
+		return nil
+	}
+	// fasthttpはKeepHijackedConns=falseの場合、hijack wrapperのCloseをno-opにし、
+	// handler終了後に実接続を閉じます。Read待機中のhandlerをshutdownで解除するため、
+	// UnsafeConnが提供されている場合は実際のnet.Connを直接closeします。
+	networkConn := conn.Conn.NetConn()
+	if unsafeConn, ok := networkConn.(interface{ UnsafeConn() net.Conn }); ok {
+		if actualConn := unsafeConn.UnsafeConn(); actualConn != nil {
+			return actualConn.Close()
+		}
+	}
 	return conn.Conn.Close()
 }
 func (conn *WebSocketConn) NextReader() (messageType int, r io.Reader, err error) {

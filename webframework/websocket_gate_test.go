@@ -2,6 +2,7 @@ package gw_web
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"testing"
@@ -46,7 +47,9 @@ func TestWebSocketRoutesAutomaticallyTrackAndRejectConnections(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := newWebSocketGateTestApp()
 			connected := make(chan struct{})
+			disconnected := make(chan struct{})
 			tt.register(app, func(conn *WebSocketConn) {
+				defer close(disconnected)
 				close(connected)
 				_, _, _ = conn.ReadMessage()
 			})
@@ -63,12 +66,20 @@ func TestWebSocketRoutesAutomaticallyTrackAndRejectConnections(t *testing.T) {
 			case <-time.After(2 * time.Second):
 				t.Fatal("WebSocket handler did not start")
 			}
+			app.webSockets.mu.Lock()
+			trackedCount := len(app.webSockets.connections)
+			app.webSockets.mu.Unlock()
+			if trackedCount != 1 {
+				t.Fatalf("tracked WebSocket connections=%d, want=1", trackedCount)
+			}
 
 			app.webSockets.closeAll()
-			_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-			if _, _, err := conn.ReadMessage(); err == nil {
-				t.Fatal("tracked WebSocket connection must close")
+			select {
+			case <-disconnected:
+			case <-time.After(2 * time.Second):
+				t.Fatal("WebSocket handler did not stop after gate close")
 			}
+			assertWebSocketGateConnectionClosed(t, conn)
 
 			newConn, response, err := websocket.DefaultDialer.Dial("ws://"+address+path, nil)
 			if newConn != nil {
@@ -109,7 +120,9 @@ func TestWebAppShutdownMethodsCloseTrackedWebSockets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := newWebSocketGateTestApp()
 			connected := make(chan struct{})
+			disconnected := make(chan struct{})
 			app.WsGet("/ws", func(conn *WebSocketConn) {
+				defer close(disconnected)
 				close(connected)
 				_, _, _ = conn.ReadMessage()
 			})
@@ -125,11 +138,26 @@ func TestWebAppShutdownMethodsCloseTrackedWebSockets(t *testing.T) {
 			if err := tt.shutdown(app); err != nil {
 				t.Fatal(err)
 			}
-			_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-			if _, _, err := conn.ReadMessage(); err == nil {
-				t.Fatal("WebSocket connection must close before shutdown returns")
+			select {
+			case <-disconnected:
+			default:
+				t.Fatal("WebSocket handler must stop before shutdown returns")
 			}
+			assertWebSocketGateConnectionClosed(t, conn)
 		})
+	}
+}
+
+func assertWebSocketGateConnectionClosed(t *testing.T, conn *websocket.Conn) {
+	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err := conn.ReadMessage()
+	if err == nil {
+		t.Fatal("WebSocket connection must be closed")
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		t.Fatalf("WebSocket connection remained open until read timeout: %v", err)
 	}
 }
 
