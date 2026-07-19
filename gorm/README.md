@@ -52,6 +52,29 @@ scoped := gw_gorm.WithScope(db, &gw_gorm.Scope{...}) // リクエスト毎にス
 - `Raw()` / `Exec()` の生 SQL はコールバックを通らないためガード対象外
 - `AssertScopedModels(exceptions, models...)` を起動時に呼ぶと「tenant_id カラムがあるのにマーカー未実装」を検出できる（マーカー付け忘れ対策）
 
+## contextとtransactionへのScope伝搬
+
+HTTP middlewareなどで確定したScopeをrepositoryまで伝搬する場合は、Scopeを個別引数にせずcontextへ保存できる。
+
+```go
+ctx = gw_gorm.WithScopeContext(ctx, &gw_gorm.Scope{
+    TenantIds: []string{"tenant-a"},
+    OrgIds:    []string{"org-a"},
+})
+
+db := gw_gorm.PickConnectionIfEmpty(ctx, explicitDB, defaultDB)
+err := gw_gorm.WithTx(ctx, defaultDB, func(tx *gorm.DB) error {
+    return tx.Create(&row).Error
+})
+```
+
+- `WithScopeContext` と `ScopeFromContext` はScopeを複製し、外部からのslice変更による認可範囲の変化を防ぐ
+- `PickConnectionIfEmpty` は明示DBを優先する。明示DBは既にtransactionや意図的な管理用DBである可能性があるため、contextのScopeを暗黙に上書きしない
+- 明示DBがnilなら既定DBへcontextのScopeを適用する。Scopeがなければ通常DBとなり、ガード対象モデルへの操作は `UseTenantGuard` が拒否する
+- `WithTx` はScope付きの既定DBからtransactionを開始する。Scopeなしでも開始自体は許可するが、ガード対象操作はfail-closedになる
+- goutilはアプリケーションのグローバル接続を保持しない。`defaultDB`は呼び出し側が管理する
+- `Raw()` / `Exec()` はtransaction内でもTenant Guard対象外なので、ユーザー入力に基づく処理では使用しない
+
 ## FindOne — 「不在はエラーではない」検索
 
 `First` は 0 件を `ErrRecordNotFound`（合成エラー）にするため、不在があり得る検索では
