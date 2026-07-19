@@ -31,13 +31,15 @@ type WebCtx struct {
 	Ctx interface{}
 }
 type WebApp struct {
-	App  interface{}
-	docs *docRegistry
+	App        interface{}
+	docs       *docRegistry
+	webSockets *webSocketGate
 }
 type WebGroup struct {
-	Group  interface{}
-	prefix string
-	docs   *docRegistry
+	Group      interface{}
+	prefix     string
+	docs       *docRegistry
+	webSockets *webSocketGate
 }
 type WebRouter interface {
 	Get(key string, defaultValue ...string) string
@@ -96,9 +98,15 @@ func toFiberHandlerFromWs(wsHandler WsHandler, cfg *WebSocketConfig) fiber.Handl
 	return websocket.New(handler, fiberCfg)
 }
 
-func toFiberHandlersFromWs(webHandlerList []WsHandler, cfg *WebSocketConfig) []any {
+func toFiberHandlersFromWs(webHandlerList []WsHandler, cfg *WebSocketConfig, gate *webSocketGate) []any {
 	hList := []any{}
+	if gate != nil {
+		hList = append(hList, toFiberHandler(gate.middleware))
+	}
 	for _, handler := range webHandlerList {
+		if gate != nil {
+			handler = gate.wrap(handler)
+		}
 		hList = append(hList, toFiberHandlerFromWs(handler, cfg))
 	}
 	return hList
@@ -200,8 +208,9 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettin
 	// v3: Static メソッドは削除。静的ミドルウェアに置き換え
 	app.Use(static.New("/static", static.Config{FS: os.DirFS("static")}))
 	return &WebApp{
-		App:  app,
-		docs: newDocRegistry(),
+		App:        app,
+		docs:       newDocRegistry(),
+		webSockets: newWebSocketGate(),
 	}
 }
 
@@ -224,9 +233,10 @@ func normalizeLoggerFormat(format string) string {
 }
 func (app WebApp) Group(prefix string, handlers ...WebHandler) WebGroup {
 	return WebGroup{
-		Group:  app.App.(*fiber.App).Group(prefix, toFiberHandlers(handlers)...),
-		prefix: prefix,
-		docs:   app.docs,
+		Group:      app.App.(*fiber.App).Group(prefix, toFiberHandlers(handlers)...),
+		prefix:     prefix,
+		docs:       app.docs,
+		webSockets: app.webSockets,
 	}
 }
 func (app WebApp) Get(path string, handlers ...WebHandler) {
@@ -269,14 +279,14 @@ func (app WebApp) Delete(path string, handlers ...WebHandler) {
 	a.Delete(path, hs[0], hs[1:]...)
 }
 func (app WebApp) WsGet(path string, handlers ...WsHandler) {
-	hs := toFiberHandlersFromWs(handlers, nil)
+	hs := toFiberHandlersFromWs(handlers, nil, app.webSockets)
 	if len(hs) == 0 {
 		return
 	}
 	app.App.(*fiber.App).Get(path, hs[0], hs[1:]...)
 }
 func (app WebApp) WsGetWithConfig(path string, cfg WebSocketConfig, handlers ...WsHandler) {
-	hs := toFiberHandlersFromWs(handlers, &cfg)
+	hs := toFiberHandlersFromWs(handlers, &cfg, app.webSockets)
 	if len(hs) == 0 {
 		return
 	}
@@ -287,14 +297,17 @@ func (app WebApp) Listen(addr string) error {
 	return a.Listen(addr)
 }
 func (app WebApp) ShutdownWithTimeout(duration time.Duration) error {
+	app.webSockets.closeAll()
 	a := app.App.(*fiber.App)
 	return a.ShutdownWithTimeout(duration)
 }
 func (app WebApp) ShutdownWithContext(ctx context.Context) error {
+	app.webSockets.closeAll()
 	a := app.App.(*fiber.App)
 	return a.ShutdownWithContext(ctx)
 }
 func (app WebApp) Shutdown() error {
+	app.webSockets.closeAll()
 	a := app.App.(*fiber.App)
 	return a.Shutdown()
 }
@@ -351,14 +364,14 @@ func (group WebGroup) Use(args ...interface{}) {
 }
 
 func (group WebGroup) WsGet(path string, handlers ...WsHandler) {
-	hs := toFiberHandlersFromWs(handlers, nil)
+	hs := toFiberHandlersFromWs(handlers, nil, group.webSockets)
 	if len(hs) == 0 {
 		return
 	}
 	group.Group.(*fiber.Group).Get(path, hs[0], hs[1:]...)
 }
 func (group WebGroup) WsGetWithConfig(path string, cfg WebSocketConfig, handlers ...WsHandler) {
-	hs := toFiberHandlersFromWs(handlers, &cfg)
+	hs := toFiberHandlersFromWs(handlers, &cfg, group.webSockets)
 	if len(hs) == 0 {
 		return
 	}
