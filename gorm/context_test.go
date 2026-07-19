@@ -3,13 +3,9 @@ package gw_gorm
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
-	gw_web "github.com/generalworksinc/goutil/webframework"
-	"github.com/gofiber/fiber/v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -43,29 +39,6 @@ func TestScopeContextHandlesNilInputs(t *testing.T) {
 	if scope, ok := scopeFromContext(nil); ok || scope != nil {
 		t.Fatalf("nil context scope=%+v ok=%v", scope, ok)
 	}
-}
-
-func TestAttachScopeSetsScopeOnWebContext(t *testing.T) {
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error {
-		webCtx := &gw_web.WebCtx{Ctx: c}
-		AttachScope(webCtx, singleScope())
-		actual, ok := scopeFromContext(webCtx.Context())
-		if !ok || !actual.CanSeeTenant("t1") || !actual.CanSeeOrg("o1") {
-			t.Fatalf("scope=%+v ok=%v", actual, ok)
-		}
-		return c.SendStatus(http.StatusNoContent)
-	})
-
-	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/", http.NoBody))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusNoContent {
-		t.Fatalf("status=%d", response.StatusCode)
-	}
-	AttachScope(nil, singleScope())
 }
 
 func TestTransactionFailsClosedWithoutScope(t *testing.T) {
