@@ -28,6 +28,14 @@ type BaseModelLogicalDel struct {
 	UpdatedAt time.Time  `xorm:"updated" json:"updatedAt"`
 	DeletedAt *time.Time `xorm:"deleted" json:"deletedAt"`
 }
+// 【注意】ByManualId 系の base は Id フィールドを持たない。
+// 埋め込む側の struct が必ず自前で pk タグ付きの Id を宣言すること。
+//
+//	Id string `xorm:"varchar(46) pk" json:"id"`
+//
+// pk を忘れるとコンパイルも Insert も通るが、そのモデルへの .ID() 呼び出し
+// (Get/Update/Delete)が実行時に「ID condition is error, expect 0 primarykeys」
+// エラーで全て失敗する(RefreshToken の失効処理が壊れていた実例あり)。
 type BaseModelByManualIdLogicalDel struct {
 	CreatedAt time.Time  `xorm:"created" json:"createdAt"`
 	UpdatedAt time.Time  `xorm:"updated" json:"updatedAt"`
@@ -53,8 +61,11 @@ func (entity *BaseModelLogicalDel) IsCreated() bool {
 }
 
 type BaseModelSimple struct {
-	//idは自動的にprimary keyに設定される（※UUIDをセット）
-	Id string `sql:"type:varchar(46)" json:"id"`
+	//idはprimary key（※UUIDをセット）
+	//※旧タグは `sql:"type:varchar(46)"` で、xorm が読まない無効なタグだったため
+	//  primary key が付かないテーブルが生成されていた。既にこの base を埋め込んで
+	//  運用中のテーブルがある場合、バージョンアップ後の Sync2 で PK が付与される。
+	Id string `xorm:"varchar(46) pk" json:"id"`
 }
 
 func (entity *BaseModelSimple) BeforeInsert() {
@@ -85,6 +96,8 @@ type BaseModelLogicalDelUlid struct {
 	UpdatedAt time.Time  `xorm:"updated" json:"updatedAt"`
 	DeletedAt *time.Time `xorm:"deleted" json:"deletedAt"`
 }
+// 【注意】Id フィールドを持たない。埋め込む側が必ず pk タグ付きの Id を自前宣言すること
+// (詳細は BaseModelByManualIdLogicalDel のコメント参照)。
 type BaseModelByManualIdLogicalDelUlid struct {
 	CreatedAt time.Time  `xorm:"datetime(3) created" json:"createdAt"`
 	UpdatedAt time.Time  `xorm:"updated" json:"updatedAt"`
@@ -95,6 +108,8 @@ func (entity *BaseModelByManualIdLogicalDelUlid) IsCreated() bool {
 	return entity.CreatedAt == time.Time{}
 }
 
+// 【注意】Id フィールドを持たない。埋め込む側が必ず pk タグ付きの Id を自前宣言すること
+// (詳細は BaseModelByManualIdLogicalDel のコメント参照)。
 type BaseModelByManualId struct {
 	CreatedAt time.Time `xorm:"created" json:"createdAt"`
 	UpdatedAt time.Time `xorm:"updated" json:"updatedAt"`
@@ -113,8 +128,9 @@ func (entity *BaseModelLogicalDelUlid) IsCreated() bool {
 }
 
 type BaseModelSimpleUlid struct {
-	//idは自動的にprimary keyに設定される（※UUIDをセット）
-	Id string `sql:"type:varchar(46)" json:"id"`
+	//idはprimary key（※ULIDをセット）
+	//※旧タグは `sql:"type:varchar(46)"` で、xorm が読まない無効なタグだった(BaseModelSimple と同様)。
+	Id string `xorm:"varchar(46) pk" json:"id"`
 }
 
 func (entity *BaseModelSimpleUlid) BeforeInsert() {
