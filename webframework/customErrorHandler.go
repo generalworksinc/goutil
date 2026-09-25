@@ -31,7 +31,23 @@ type ErrorData struct {
 	FullString string
 }
 
+// ErrorHandlerOptions は CustomHTTPErrorHandler が記録・送信する情報を絞るための設定。
+// 既定値(ゼロ値)は従来どおり本文・IP・User-Agent を含める。
+type ErrorHandlerOptions struct {
+	// OmitRequestBody を true にすると、リクエスト本文を ErrorData に含めない(Sentry にも送らない)。
+	// ログイン情報や個人情報を受けるエンドポイントを持つアプリでは true を推奨。
+	OmitRequestBody bool
+	// OmitClientInfo を true にすると、IP と User-Agent をログと Sentry に含めない。
+	OmitClientInfo bool
+}
+
+// CustomHTTPErrorHandler は従来互換のエラーハンドラ(本文・IP・UA を含める)。
 func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) string) func(ctx *WebCtx, err error) error {
+	return CustomHTTPErrorHandlerWithOptions(version, getUserIdFunc, ErrorHandlerOptions{})
+}
+
+// CustomHTTPErrorHandlerWithOptions は記録する情報を ErrorHandlerOptions で絞れるエラーハンドラ。
+func CustomHTTPErrorHandlerWithOptions(version string, getUserIdFunc func(ctx *WebCtx) string, opts ErrorHandlerOptions) func(ctx *WebCtx, err error) error {
 	return func(ctx *WebCtx, err error) error {
 		reqCtx := ctx.Context()
 		defer func() {
@@ -68,29 +84,7 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 		}
 
 		userId := getUserIdFunc(ctx)
-		bodyStrUtf8 := utf8string.NewString(string(ctx.Body()))
-		bodyStr := ""
-		if bodyStrUtf8.RuneCount() > 2000 {
-			bodyStr = bodyStrUtf8.Slice(0, 2000)
-		} else {
-			bodyStr = bodyStrUtf8.String()
-		}
-
-		errorData := ErrorData{
-			Message:    message,
-			StackTrace: stackTrace,
-			Code:       code,
-			Error:      err.Error(),
-			Url:        ctx.BaseURL() + ctx.OriginalURL(),
-			Method:     ctx.Method(),
-			Protocol:   ctx.Protocol(),
-			Ip:         ctx.IP(),
-			Ua:         string(ctx.UserAgent()),
-			UserId:     userId,
-			Version:    version,
-			Body:       bodyStr,
-			// FullString: ctx.String(),
-		}
+		errorData := collectErrorData(ctx, err, code, message, stackTrace, userId, version, opts)
 
 		// 5xx は ERROR、4xx 等は WARN で構造化出力（request_id は context 注入ハンドラが付与）
 		level := slog.LevelWarn
@@ -103,8 +97,8 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 			slog.String("message", message),
 			slog.String("url", errorData.Url),
 			slog.String("method", errorData.Method),
-			slog.String("ip", errorData.Ip),
-			slog.String("ua", errorData.Ua),
+			slog.String("ip", errorData.Ip), // OmitClientInfo のときは空
+			slog.String("ua", errorData.Ua), // OmitClientInfo のときは空
 			slog.String("error_user_id", userId),
 			slog.String("version", version),
 			slog.String("stack_trace", stackTrace),
@@ -159,5 +153,41 @@ func CustomHTTPErrorHandler(version string, getUserIdFunc func(ctx *WebCtx) stri
 		ctx.Set(fiber.HeaderContentType, fiber.MIMETextPlainCharsetUTF8)
 		//return ctx.Status(code).SendString(message)
 		return ctx.SendString(message)
+	}
+}
+
+// collectErrorData はログと Sentry に載せる情報を組み立てる。opts で本文とクライアント情報を除外できる。
+func collectErrorData(ctx *WebCtx, err error, code int, message, stackTrace, userId, version string, opts ErrorHandlerOptions) ErrorData {
+	bodyStr := ""
+	if !opts.OmitRequestBody {
+		bodyStrUtf8 := utf8string.NewString(string(ctx.Body()))
+		if bodyStrUtf8.RuneCount() > 2000 {
+			bodyStr = bodyStrUtf8.Slice(0, 2000)
+		} else {
+			bodyStr = bodyStrUtf8.String()
+		}
+	}
+	ip, ua := "", ""
+	if !opts.OmitClientInfo {
+		ip = ctx.IP()
+		ua = string(ctx.UserAgent())
+	}
+	errText := ""
+	if err != nil {
+		errText = err.Error()
+	}
+	return ErrorData{
+		Message:    message,
+		StackTrace: stackTrace,
+		Code:       code,
+		Error:      errText,
+		Url:        ctx.BaseURL() + ctx.OriginalURL(),
+		Method:     ctx.Method(),
+		Protocol:   ctx.Protocol(),
+		Ip:         ip,
+		Ua:         ua,
+		UserId:     userId,
+		Version:    version,
+		Body:       bodyStr,
 	}
 }
