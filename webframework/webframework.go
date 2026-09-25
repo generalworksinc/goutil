@@ -470,8 +470,14 @@ func (ctx WebCtx) Params(key string, defaultValue ...string) string {
 
 // Locals reads or writes a request-local value using an untyped key.
 //
-// Deprecated: Use SetLocal and Local with a shared LocalKey. Migrate every
+// Prefer SetLocal and Local with a shared LocalKey for new code. Migrate every
 // writer and reader of a key together; typed keys cannot read string keys.
+//
+// This method is kept without a "Deprecated:" marker on purpose: staticcheck
+// (2025.1.1) misattributes a Deprecated paragraph on this method to
+// WebCtx.Context() when the type also declares generic methods (SetLocal/Local),
+// which makes every caller of Context() fail SA1019. Re-add the marker once
+// staticcheck handles generic methods correctly.
 func (ctx WebCtx) Locals(key interface{}, value ...interface{}) interface{} {
 	return ctx.Ctx.(fiber.Ctx).Locals(key, value...)
 }
