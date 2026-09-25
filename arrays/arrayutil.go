@@ -1,12 +1,9 @@
 package gw_arrays
 
+import "slices"
+
 func ContainsUint(array []uint, value uint) bool {
-	for _, v := range array {
-		if value == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(array, value)
 }
 func GetKeys(m map[string]interface{}) []string {
 	ks := []string{}
@@ -23,38 +20,33 @@ func RemoveDuplicateStrList(array []string) []string {
 
 // 順番を保持したまま重複を削除する（Generics版）
 func RemoveDuplicate[T comparable](array []T) []T {
-	seen := make(map[T]bool)
-	result := []T{}
+	seen := make(map[T]struct{}, len(array))
+	result := make([]T, 0, len(array))
 	for _, v := range array {
-		if !seen[v] {
-			seen[v] = true
+		if _, exists := seen[v]; !exists {
+			seen[v] = struct{}{}
 			result = append(result, v)
 		}
 	}
 	return result
 }
 func ContainsString(array []string, value string) bool {
-	for _, v := range array {
-		if value == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(array, value)
 }
 
 func IndexString(array []string, value string) int {
-	for ind, v := range array {
-		if value == v {
-			return ind
-		}
-	}
-	return -1
+	return slices.Index(array, value)
 }
 func UnionString(xs, ys []string) []string {
 	zs := make([]string, len(xs))
 	copy(zs, xs)
+	seen := make(map[string]struct{}, len(xs)+len(ys))
+	for _, x := range xs {
+		seen[x] = struct{}{}
+	}
 	for _, y := range ys {
-		if !ContainsString(zs, y) {
+		if _, exists := seen[y]; !exists {
+			seen[y] = struct{}{}
 			zs = append(zs, y)
 		}
 	}
@@ -62,8 +54,12 @@ func UnionString(xs, ys []string) []string {
 }
 func IntersectString(xs, ys []string) []string {
 	zs := make([]string, 0)
+	seen := make(map[string]struct{}, len(xs))
+	for _, x := range xs {
+		seen[x] = struct{}{}
+	}
 	for _, y := range ys {
-		if ContainsString(xs, y) {
+		if _, exists := seen[y]; exists {
 			zs = append(zs, y)
 		}
 	}

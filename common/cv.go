@@ -16,25 +16,54 @@ func Pointer[T any](value T) *T {
 
 // 循環参照を検出するための構造体
 type cycleDetector struct {
-	visited map[uintptr]bool
+	visited map[cloneVisit]bool
+}
+
+type cloneVisit struct {
+	typ  reflect.Type
+	addr uintptr
+	len  int
+	cap  int
+}
+
+func visitFor(val reflect.Value) cloneVisit {
+	visit := cloneVisit{typ: val.Type(), addr: val.Pointer()}
+	if val.Kind() == reflect.Slice {
+		visit.len, visit.cap = val.Len(), val.Cap()
+	}
+	return visit
 }
 
 // 新しい循環参照検出器を作成
 func newCycleDetector() *cycleDetector {
 	return &cycleDetector{
-		visited: make(map[uintptr]bool),
+		visited: make(map[cloneVisit]bool),
 	}
 }
 
-// 循環参照をチェック
-// スライスの循環チェックに注意。
-// arr := []int{1, 2, 3, 4} として、sub := arr[1:3] のように部分スライスを作ると、arr と sub は底層配列を共有するので val.Pointer() が同じになるので循環参照として検出されます。
-func (cd *cycleDetector) check(addr uintptr) bool {
-	if cd.visited[addr] {
+// 循環参照は現在たどっている経路上の値だけを対象にする。
+func (cd *cycleDetector) check(val reflect.Value) bool {
+	visit := visitFor(val)
+	if cd.visited[visit] {
 		return true // 循環参照を検出
 	}
-	cd.visited[addr] = true
+	cd.visited[visit] = true
 	return false
+}
+
+func (cd *cycleDetector) leave(val reflect.Value) {
+	delete(cd.visited, visitFor(val))
+}
+
+func clonedValue(value interface{}, typ reflect.Type) (reflect.Value, error) {
+	if value == nil {
+		return reflect.Zero(typ), nil
+	}
+	result := reflect.ValueOf(value)
+	if !result.Type().AssignableTo(typ) {
+		return reflect.Value{}, gw_errors.Errorf("cloned value type %s is not assignable to %s", result.Type(), typ)
+	}
+	return result, nil
 }
 
 // deepCopyWithCycleCheck は循環参照チェック付きのdeepCopy
@@ -53,17 +82,22 @@ func deepCopyWithCycleCheck(src interface{}, cd *cycleDetector) (interface{}, er
 func copyRecursive(val reflect.Value, cd *cycleDetector) (interface{}, error) {
 
 	switch val.Kind() {
-
-	// 1. ポインタの場合: 中身をたどって再帰的にコピー
-	case reflect.Ptr:
+	case reflect.Interface:
 		if val.IsNil() {
 			return nil, nil
 		}
+		return copyRecursive(val.Elem(), cd)
+
+	// 1. ポインタの場合: 中身をたどって再帰的にコピー
+	case reflect.Pointer:
+		if val.IsNil() {
+			return reflect.Zero(val.Type()).Interface(), nil
+		}
 		//cyclecheck
-		addr := val.Pointer()
-		if cd.check(addr) {
+		if cd.check(val) {
 			return nil, gw_errors.New("circular reference detected")
 		}
+		defer cd.leave(val)
 		// ポインタが指す値の型を元に新しい値を作り
 		// 再帰的に値をコピーしてからアサインする
 		newPtr := reflect.New(val.Elem().Type())
@@ -71,7 +105,11 @@ func copyRecursive(val reflect.Value, cd *cycleDetector) (interface{}, error) {
 		if err != nil {
 			return nil, gw_errors.Wrap(err)
 		}
-		newPtr.Elem().Set(reflect.ValueOf(clonedChild))
+		childValue, err := clonedValue(clonedChild, newPtr.Elem().Type())
+		if err != nil {
+			return nil, gw_errors.Wrap(err)
+		}
+		newPtr.Elem().Set(childValue)
 		return newPtr.Interface(), nil
 
 	// 2. 構造体の場合: フィールドを順にたどって再帰的にセット
@@ -86,23 +124,11 @@ func copyRecursive(val reflect.Value, cd *cycleDetector) (interface{}, error) {
 				if err != nil {
 					return nil, gw_errors.Wrap(err)
 				}
-				// 型の不整合を防ぐため、フィールドの型チェックを行う
-				if clonedField == nil {
-					// nilの場合はゼロ値をセット
-					newStruct.Field(i).Set(reflect.Zero(newStruct.Field(i).Type()))
-				} else {
-					clonedVal := reflect.ValueOf(clonedField)
-					if clonedVal.Type().AssignableTo(newStruct.Field(i).Type()) {
-						newStruct.Field(i).Set(clonedVal)
-					} else {
-						// 型が一致しない場合はゼロ値をセット
-						newStruct.Field(i).Set(reflect.Zero(newStruct.Field(i).Type()))
-					}
+				clonedVal, err := clonedValue(clonedField, newStruct.Field(i).Type())
+				if err != nil {
+					return nil, gw_errors.Wrap(err)
 				}
-			} else {
-				// エクスポートされていないフィールドなど
-				// 直接セットできない場合は値をそのままにするかスキップ
-				// ここでは何もしない例としてスキップ
+				newStruct.Field(i).Set(clonedVal)
 			}
 		}
 		return newStruct.Interface(), nil
@@ -110,48 +136,57 @@ func copyRecursive(val reflect.Value, cd *cycleDetector) (interface{}, error) {
 	// 3. スライスの場合: 全要素を再帰的にコピー
 	case reflect.Slice:
 		if val.IsNil() {
-			return nil, nil
+			return reflect.Zero(val.Type()).Interface(), nil
 		}
 		//cyclecheck
-		addr := val.Pointer()
-		if cd.check(addr) {
+		if cd.check(val) {
 			return nil, gw_errors.New("circular reference detected")
 		}
+		defer cd.leave(val)
 		newSlice := reflect.MakeSlice(val.Type(), val.Len(), val.Cap())
 		for i := 0; i < val.Len(); i++ {
-			itemVal := val.Index(i).Interface()
-			clonedChild, err := copyRecursive(reflect.ValueOf(itemVal), cd)
+			clonedChild, err := copyRecursive(val.Index(i), cd)
 			if err != nil {
 				return nil, gw_errors.Wrap(err)
 			}
-			newSlice.Index(i).Set(reflect.ValueOf(clonedChild))
+			childValue, err := clonedValue(clonedChild, newSlice.Index(i).Type())
+			if err != nil {
+				return nil, gw_errors.Wrap(err)
+			}
+			newSlice.Index(i).Set(childValue)
 		}
 		return newSlice.Interface(), nil
 
 	// 4. マップの場合: 全エントリを再帰的にコピー
 	case reflect.Map:
 		if val.IsNil() {
-			return nil, nil
+			return reflect.Zero(val.Type()).Interface(), nil
 		}
 		//cyclecheck
-		addr := val.Pointer()
-		if cd.check(addr) {
+		if cd.check(val) {
 			return nil, gw_errors.New("circular reference detected")
 		}
+		defer cd.leave(val)
 		newMap := reflect.MakeMapWithSize(val.Type(), val.Len())
 		for _, key := range val.MapKeys() {
-			valKey := key.Interface()
-			valVal := val.MapIndex(key).Interface()
 			// mapのkeyは原則としてImmutableなためそのまま使用可能
-			clonedKey, err := copyRecursive(reflect.ValueOf(valKey), cd)
+			clonedKey, err := copyRecursive(key, cd)
 			if err != nil {
 				return nil, gw_errors.Wrap(err)
 			}
-			clonedVal, err := copyRecursive(reflect.ValueOf(valVal), cd)
+			clonedVal, err := copyRecursive(val.MapIndex(key), cd)
 			if err != nil {
 				return nil, gw_errors.Wrap(err)
 			}
-			newMap.SetMapIndex(reflect.ValueOf(clonedKey), reflect.ValueOf(clonedVal))
+			keyValue, err := clonedValue(clonedKey, val.Type().Key())
+			if err != nil {
+				return nil, gw_errors.Wrap(err)
+			}
+			mapValue, err := clonedValue(clonedVal, val.Type().Elem())
+			if err != nil {
+				return nil, gw_errors.Wrap(err)
+			}
+			newMap.SetMapIndex(keyValue, mapValue)
 		}
 		return newMap.Interface(), nil
 
@@ -159,12 +194,15 @@ func copyRecursive(val reflect.Value, cd *cycleDetector) (interface{}, error) {
 	case reflect.Array:
 		newArray := reflect.New(val.Type()).Elem()
 		for i := 0; i < val.Len(); i++ {
-			itemVal := val.Index(i).Interface()
-			clonedChild, err := copyRecursive(reflect.ValueOf(itemVal), cd)
+			clonedChild, err := copyRecursive(val.Index(i), cd)
 			if err != nil {
 				return nil, gw_errors.Wrap(err)
 			}
-			newArray.Index(i).Set(reflect.ValueOf(clonedChild))
+			childValue, err := clonedValue(clonedChild, newArray.Index(i).Type())
+			if err != nil {
+				return nil, gw_errors.Wrap(err)
+			}
+			newArray.Index(i).Set(childValue)
 		}
 		return newArray.Interface(), nil
 

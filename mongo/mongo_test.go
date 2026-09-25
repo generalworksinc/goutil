@@ -65,6 +65,39 @@ func TestIdSelectionByModelType(t *testing.T) {
 	}
 }
 
+func TestWithIDAndWithObjectIDKeepBaseQueryUnchanged(t *testing.T) {
+	base := &Database[unitObjectModel]{}
+	first := primitive.NewObjectID()
+	second := primitive.NewObjectID()
+	firstQuery := base.WithID(first.Hex())
+	secondQuery := base.WithObjectID(&second)
+
+	if base.idValue != nil {
+		t.Fatalf("base query was changed: %v", base.idValue)
+	}
+	if firstQuery.idValue != first || secondQuery.idValue != second {
+		t.Fatalf("derived queries have wrong IDs: first=%v second=%v", firstQuery.idValue, secondQuery.idValue)
+	}
+	if firstQuery == base || secondQuery == base || firstQuery == secondQuery {
+		t.Fatal("derived queries must be independent")
+	}
+	if cleared := firstQuery.WithObjectID(nil); cleared.idValue != nil || firstQuery.idValue != first {
+		t.Fatal("clearing a derived ID changed another query")
+	}
+}
+
+func TestWithSessionKeepsBaseQueryUnchanged(t *testing.T) {
+	base := &Database[unitStringModel]{idValue: "user-1"}
+	session := &Session{}
+	derived := base.WithSession(session)
+	if base.session != nil || derived.session != session || derived.idValue != "user-1" {
+		t.Fatalf("unexpected session state: base=%p derived=%p id=%v", base.session, derived.session, derived.idValue)
+	}
+	if derived == base {
+		t.Fatal("WithSession must return an independent query")
+	}
+}
+
 func TestCond(t *testing.T) {
 	db := &Database[unitObjectModel]{}
 

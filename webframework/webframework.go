@@ -467,6 +467,11 @@ func (ctx WebCtx) RequestHeaderSizeBytes() int {
 func (ctx WebCtx) Params(key string, defaultValue ...string) string {
 	return ctx.Ctx.(fiber.Ctx).Params(key, defaultValue...)
 }
+
+// Locals reads or writes a request-local value using an untyped key.
+//
+// Deprecated: Use SetLocal and Local with a shared LocalKey. Migrate every
+// writer and reader of a key together; typed keys cannot read string keys.
 func (ctx WebCtx) Locals(key interface{}, value ...interface{}) interface{} {
 	return ctx.Ctx.(fiber.Ctx).Locals(key, value...)
 }

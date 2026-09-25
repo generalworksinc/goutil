@@ -179,6 +179,14 @@ func (db *Database[T]) Session(session *Session) *Database[T] {
 	return db
 }
 
+// WithSession returns a copy with the given session, leaving db unchanged.
+// Use it when a Database may be shared between operations.
+func (db *Database[T]) WithSession(session *Session) *Database[T] {
+	copy := *db
+	copy.session = session
+	return &copy
+}
+
 func (db *Database[T]) Id(id string) *Database[T] {
 	if modelUsesStringID[T]() {
 		db.idValue = id
@@ -192,6 +200,12 @@ func (db *Database[T]) Id(id string) *Database[T] {
 	return db
 }
 
+// WithID returns a copy with the given ID, leaving db unchanged.
+func (db *Database[T]) WithID(id string) *Database[T] {
+	copy := *db
+	return copy.Id(id)
+}
+
 func (db *Database[T]) Oid(oid *primitive.ObjectID) *Database[T] {
 	if oid == nil {
 		db.idValue = nil
@@ -199,6 +213,12 @@ func (db *Database[T]) Oid(oid *primitive.ObjectID) *Database[T] {
 	}
 	db.idValue = *oid
 	return db
+}
+
+// WithObjectID returns a copy with the given ObjectID, leaving db unchanged.
+func (db *Database[T]) WithObjectID(oid *primitive.ObjectID) *Database[T] {
+	copy := *db
+	return copy.Oid(oid)
 }
 
 func (db *Database[T]) DeleteOne(filter interface{}, opts ...*options.DeleteOptions) (int64, error) {
@@ -228,7 +248,7 @@ func (db *Database[T]) UpdateOne(filter interface{}, update interface{}, opts ..
 	}
 	ctx, cancel := db.operationContext()
 	defer cancel()
-	result, err := collection.UpdateOne(ctx, condFilter, bson.D{{"$set", updateVal}}, opts...)
+	result, err := collection.UpdateOne(ctx, condFilter, bson.D{{Key: "$set", Value: updateVal}}, opts...)
 	if err != nil {
 		return 0, gw_errors.Wrap(err)
 	}
@@ -287,7 +307,7 @@ func (db *Database[T]) UpsertOne(entity *T, filter interface{}, updateFields []s
 
 	ctx, cancel := db.operationContext()
 	defer cancel()
-	result := collection.FindOneAndUpdate(ctx, condFilter, bson.D{{"$set", updateParams}}, opts...)
+	result := collection.FindOneAndUpdate(ctx, condFilter, bson.D{{Key: "$set", Value: updateParams}}, opts...)
 	if err := result.Err(); err == nil {
 		return entity, nil
 	} else if errors.Is(err, mongo.ErrNoDocuments) {
@@ -382,18 +402,18 @@ func (db *Database[T]) cond(filter interface{}) (interface{}, error) {
 		return filter, nil
 	}
 	if filter == nil {
-		return bson.D{{"_id", db.idValue}}, nil
+		return bson.D{{Key: "_id", Value: db.idValue}}, nil
 	}
 
 	switch f := filter.(type) {
 	case primitive.E:
-		return bson.D{{"_id", db.idValue}, f}, nil
+		return bson.D{{Key: "_id", Value: db.idValue}, f}, nil
 	case primitive.A:
-		return bson.D{{"_id", db.idValue}, {"$and", f}}, nil
+		return bson.D{{Key: "_id", Value: db.idValue}, {Key: "$and", Value: f}}, nil
 	case primitive.M:
-		return bson.D{{"_id", db.idValue}, {"$and", bson.A{f}}}, nil
+		return bson.D{{Key: "_id", Value: db.idValue}, {Key: "$and", Value: bson.A{f}}}, nil
 	case primitive.D:
-		return bson.D{{"_id", db.idValue}, {"$and", bson.A{f}}}, nil
+		return bson.D{{Key: "_id", Value: db.idValue}, {Key: "$and", Value: bson.A{f}}}, nil
 	default:
 		return nil, gw_errors.Errorf("filter type is not primitive.E / primitive.A / primitive.M / primitive.D: %T", filter)
 	}
@@ -404,7 +424,7 @@ func (db *Database[T]) buildUpdateValue(update interface{}) (interface{}, error)
 
 	if bsonD, ok := update.(primitive.D); ok {
 		// "_id", "created_at"は更新対象から除外
-		updateParams := primitive.D{{"updatedAt", now}}
+		updateParams := primitive.D{{Key: "updatedAt", Value: now}}
 		for _, elem := range bsonD {
 			if elem.Key != "createdAt" && elem.Key != "_id" {
 				updateParams = append(updateParams, elem)

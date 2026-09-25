@@ -303,3 +303,40 @@ func TestClone_TypeAssertionFailure(t *testing.T) {
 		t.Errorf("type mismatch: got %T, want %T", cloned, original)
 	}
 }
+
+func TestCloneSharedReferenceIsNotACycle(t *testing.T) {
+	value := 42
+	original := struct{ Left, Right *int }{&value, &value}
+	cloned, err := Clone(original)
+	if err != nil {
+		t.Fatalf("shared reference is not a cycle: %v", err)
+	}
+	if cloned.Left == nil || cloned.Right == nil || *cloned.Left != value || *cloned.Right != value {
+		t.Fatalf("cloned values changed: %#v", cloned)
+	}
+	if cloned.Left == original.Left || cloned.Right == original.Right {
+		t.Fatal("cloned references still point to the original")
+	}
+}
+
+func TestCloneNilElements(t *testing.T) {
+	original := struct {
+		Items []any
+		Map   map[string]any
+	}{
+		Items: []any{nil, (*int)(nil)},
+		Map:   map[string]any{"nil": nil, "pointer": (*int)(nil)},
+	}
+	cloned, err := Clone(original)
+	if err != nil {
+		t.Fatalf("Clone failed: %v", err)
+	}
+	itemPointer, itemIsPointer := cloned.Items[1].(*int)
+	if cloned.Items[0] != nil || !itemIsPointer || itemPointer != nil {
+		t.Fatalf("nil slice values changed: %#v", cloned.Items)
+	}
+	mapPointer, mapIsPointer := cloned.Map["pointer"].(*int)
+	if cloned.Map["nil"] != nil || !mapIsPointer || mapPointer != nil {
+		t.Fatalf("nil map values changed: %#v", cloned.Map)
+	}
+}

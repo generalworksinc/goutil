@@ -30,6 +30,17 @@ func TestRemoveDuplicate(t *testing.T) {
 	}
 }
 
+func TestUnionAndIntersectStringPreserveOrderAndDuplicates(t *testing.T) {
+	xs := []string{"a", "a", "b"}
+	ys := []string{"b", "c", "c", "a", "a", "d"}
+	if got, want := UnionString(xs, ys), []string{"a", "a", "b", "c", "d"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("union changed order or duplicates: got=%v want=%v", got, want)
+	}
+	if got, want := IntersectString(xs, ys), []string{"b", "a", "a"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("intersection changed order: got=%v want=%v", got, want)
+	}
+}
+
 func TestFilter(t *testing.T) {
 	arr := []int{1, 2, 3, 4, 5}
 	got := Filter(arr, func(v int) bool { return v%2 == 0 })

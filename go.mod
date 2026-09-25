@@ -1,11 +1,12 @@
 module github.com/generalworksinc/goutil
 
-go 1.25.0
+go 1.27.0
 
 require (
 	aidanwoods.dev/go-paseto v1.6.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/dsnet/compress v0.0.1
+	github.com/fasthttp/websocket v1.5.12
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/gofiber/contrib/v3/websocket v1.1.0
 	github.com/gofiber/fiber/v3 v3.3.0
@@ -45,7 +46,6 @@ require (
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
-	github.com/fasthttp/websocket v1.5.12 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
