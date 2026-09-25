@@ -75,10 +75,26 @@ func ConvFileToByte(uri string, data string, isEncrypt bool, encryptKey []byte) 
 			imageBody = bytes.NewReader(imageBodyBytes)
 		}
 
-		if len(ext) > 0 {
+		// mime.ExtensionsByType は OS の MIME DB 依存でアルファベット順の先頭
+		// (image/jpeg なら ".jfif" 等)を返すことがあるため、主要な MIME タイプは
+		// 正規の拡張子を明示的に割り当てる。
+		canonicalExt := map[string]string{
+			"image/jpeg":    ".jpg",
+			"image/png":     ".png",
+			"image/gif":     ".gif",
+			"image/webp":    ".webp",
+			"image/svg+xml": ".svg",
+			"image/bmp":     ".bmp",
+			"image/heic":    ".heic",
+			"image/heif":    ".heif",
+			"application/pdf": ".pdf",
+		}
+		if canonical, ok := canonicalExt[strings.ToLower(mimeType)]; ok {
+			prefix = canonical
+		} else if len(ext) > 0 {
 			prefix = ext[0]
 			//bug対応(なぜかjpegのprefixがjpe、が設定されている場合があるため)
-			if prefix == ".jpe" {
+			if prefix == ".jpe" || prefix == ".jfif" {
 				prefix = ".jpg"
 			}
 		}
