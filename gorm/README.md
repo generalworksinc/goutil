@@ -96,3 +96,26 @@ if user == nil {
 ```
 
 使い分け: **不在があり得る検索は `FindOne`、存在しなければバグという検索は `First`**。
+
+## WriteTransaction — SQLite 系での書き込みトランザクション
+
+```go
+err := gw_gorm.WriteTransaction(db.WithContext(ctx), func(tx *gorm.DB) error {
+    // 読んでから書く処理をそのまま書く
+    return tx.Save(&row).Error
+})
+```
+
+SQLite 系(ローカル SQLite / Turso libsql。dialect 名が `sqlite`)では、素の `BEGIN`(DEFERRED)で始めた
+トランザクションが「読んでから書く」ときに書き込みロックへ昇格する瞬間、他の書き込みと衝突すると待たずに
+`SQLITE_BUSY`(`database is locked`)で失敗する。`WriteTransaction` は次の挙動でこれを吸収する。
+
+- SQLite 系では `BEGIN IMMEDIATE` で開始し、最初から書き込みロックを取る
+- それでも `database is locked` になった場合は、バックオフ(既定 25ms → 最大 500ms、ジッタ付き)を挟んで
+  **トランザクション全体を** 最大 6 回やり直す(`WriteTransactionWithOptions` で変更可)
+- SQLite 系以外(PostgreSQL / MySQL)と、既にトランザクション中の `db` を渡した場合は `db.Transaction` と同じ
+  (後者は SAVEPOINT によるネスト)
+- callback 内の `tx.Transaction(...)` / `tx.Create` / `tx.Save` などは GORM 標準どおり動く
+
+callback はやり直されることがあるため、**DB 外への副作用(通知送信・ファイル書き込みなど)を入れない**こと。
+`IsSQLiteBusyError(err)` / `IsSQLiteDialect(db)` は単体でも使える。
