@@ -53,9 +53,19 @@ func (o WriteTxOptions) withDefaults() WriteTxOptions {
 // db が既にトランザクション中(ConnPool が TxCommitter)の場合は db.Transaction に委譲し、
 // GORM 標準どおり SAVEPOINT によるネストになる。
 //
-// fn はやり直されることがあるため、DB 外への副作用(通知送信など)を持たせないこと。
+// fn はやり直されることがあるため、次を守ること。
+//   - DB 外への副作用(通知送信など)を持たせない
+//   - 書き込む値(モデルなど)は fn の中で作る。DB がトランザクションを取り消しても Go の値は戻らない
+//     (fn の外で作ったモデルには、取り消された INSERT の ID などが残り、やり直しで別の SQL になる)
+//   - fn の外の変数(集計や戻り値)には、WriteTransaction が成功した後に結果を入れる
+//
+// UseWriteRetry を呼んだ DB では、そこで指定したやり直しの設定を使う。
 func WriteTransaction(db *gorm.DB, fn func(tx *gorm.DB) error) error {
-	return WriteTransactionWithOptions(db, DefaultWriteTxOptions(), fn)
+	opts := DefaultWriteTxOptions()
+	if p := writeRetryPluginOf(db); p != nil {
+		opts = p.retry
+	}
+	return WriteTransactionWithOptions(db, opts, fn)
 }
 
 // WriteTransactionWithOptions は WriteTransaction のリトライ設定を指定できる版。
@@ -71,7 +81,7 @@ func WriteTransactionWithOptions(db *gorm.DB, opts WriteTxOptions, fn func(tx *g
 	}
 	opts = opts.withDefaults()
 	begin := "BEGIN IMMEDIATE"
-	if writeRetryConfig(db) {
+	if p := writeRetryPluginOf(db); p != nil && p.concurrent {
 		begin = "BEGIN CONCURRENT"
 	}
 	return retryWrite(statementContext(db), opts, func() error {
@@ -163,6 +173,17 @@ func (o WriteTxOptions) backoff(attempt int) time.Duration {
 // ErrInvalidTransaction → スキップされる。
 type immediateTx struct {
 	conn *sql.Conn
+	// aborted は DB が取り消したトランザクション(Turso の MVCC の衝突)のエラー。取り消された後の SQL は
+	// トランザクションの外で確定してしまうため、以後の SQL と COMMIT はすべてこのエラーで拒否する
+	// (内側の Transaction のエラーを fn が握りつぶして続けても、一部だけが残らないように)。
+	aborted error
+}
+
+// markAborted は衝突のエラーを受けたら、このトランザクションを取り消し済みにする。
+func (t *immediateTx) markAborted(err error) {
+	if t.aborted == nil && isWriteConflict(err) {
+		t.aborted = err
+	}
 }
 
 var (
@@ -171,27 +192,52 @@ var (
 )
 
 func (t *immediateTx) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	if t.aborted != nil {
+		return nil, t.aborted
+	}
 	return t.conn.PrepareContext(ctx, query)
 }
 
 func (t *immediateTx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return t.conn.ExecContext(ctx, query, args...)
+	if t.aborted != nil {
+		return nil, t.aborted
+	}
+	res, err := t.conn.ExecContext(ctx, query, args...)
+	t.markAborted(err)
+	return res, err
 }
 
+// QueryContext の衝突(RETURNING 付きの書き込み)は行を読む途中で返るため、ここでは拾えない。
+// UseWriteRetry の callback が db.Error を見て markAborted する。
 func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if t.aborted != nil {
+		return nil, t.aborted
+	}
 	return t.conn.QueryContext(ctx, query, args...)
 }
 
 func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	if t.aborted != nil {
+		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で流して SQL を実行させない。
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		return t.conn.QueryRowContext(canceled, query, args...)
+	}
 	return t.conn.QueryRowContext(ctx, query, args...)
 }
 
 func (t *immediateTx) Commit() error {
+	if t.aborted != nil {
+		return t.aborted
+	}
 	_, err := t.conn.ExecContext(context.Background(), "COMMIT")
 	return err
 }
 
 func (t *immediateTx) Rollback() error {
+	if t.aborted != nil {
+		return nil // DB が既に取り消している
+	}
 	_, err := t.conn.ExecContext(context.Background(), "ROLLBACK")
 	return err
 }
@@ -225,8 +271,7 @@ func runWriteTx(db *gorm.DB, begin string, fn func(tx *gorm.DB) error) (err erro
 			return
 		}
 		// fn 内の panic、fn のエラー、COMMIT 失敗のいずれでもここに来る。
-		// Turso の MVCC は衝突したトランザクションを自ら取り消すので、ROLLBACK の失敗は接続の異常ではない。
-		if rollbackErr := itx.Rollback(); rollbackErr != nil && !isWriteConflict(err) {
+		if rollbackErr := itx.Rollback(); rollbackErr != nil {
 			slog.ErrorContext(ctx, "rollback failed; discarding connection", slog.String("error", rollbackErr.Error()))
 			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 		}

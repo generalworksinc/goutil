@@ -136,5 +136,10 @@ _ = gw_gorm.UseWriteRetry(db, gw_gorm.WriteRetryOptions{Concurrent: true})
 - トランザクションの外の 1 文の書き込み(Create / Update / Delete / Exec)も、同じエラーなら操作ごと流し直す。
   `BEGIN CONCURRENT` の途中の行に書くと、1 文の書き込みも衝突するため
 - やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは DB に何も残さない。相手の更新は DB が検知して止めるので上書きもしない
+- 衝突でトランザクションが取り消された後は、そのトランザクションの SQL と COMMIT をすべて拒否する(内側のエラーを握りつぶして
+  続けても、一部だけが残らない)。結果の行を読んだ後に失敗した 1 文の書き込みは流し直さない
+- `Retry` の設定は `WriteTransaction` と 1 文の書き込みの両方に効く
+- **fn の約束**: DB 外への副作用を入れない。書き込む値(モデル)は fn の中で作る(DB が取り消しても Go の値は戻らないため)。
+  fn の外の変数には、成功した後に結果を入れる
 - GORM の既定のトランザクション(`SkipDefaultTransaction`)は切る。複数の SQL になる書き込みは `WriteTransaction` で包む
 - やり直せるエラーかは `IsRetryableWriteError(err)` で判定できる

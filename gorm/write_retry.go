@@ -15,7 +15,7 @@ type WriteRetryOptions struct {
 	// WriteTransaction を BEGIN CONCURRENT で始め、別々の行への書き込みを並行させる。
 	// それ以外の DB(SQLite、libSQL など)では無視され、BEGIN IMMEDIATE のまま動く。
 	Concurrent bool
-	// Retry はやり直しの回数と待ち時間。ゼロ値は DefaultWriteTxOptions。
+	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。ゼロ値は DefaultWriteTxOptions。
 	Retry WriteTxOptions
 }
 
@@ -30,7 +30,8 @@ const writeRetryPluginName = "gw_gorm:write_retry"
 //
 // やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは DB に何も残さない(トランザクションは全体が取り消され、
 // 1 文の書き込みは反映されない)。ぶつかった相手の更新は DB が検知して止めるので、上書きもしない。
-// 守ること: WriteTransaction の fn に DB の外への副作用(通知の送信など)を持たせない。
+// 守ること: WriteTransaction の fn に DB の外への副作用(通知の送信など)を持たせず、書き込む値は fn の中で作る
+// (WriteTransaction のコメントを参照)。
 //
 // GORM の既定のトランザクション(Create などを 1 回ずつ BEGIN〜COMMIT で包む)は、素の BEGIN で始まりやり直せないため
 // 切る(SkipDefaultTransaction)。複数の SQL になる書き込みは WriteTransaction で包むこと。
@@ -86,16 +87,22 @@ func (p *writeRetryPlugin) Initialize(db *gorm.DB) error {
 // retrying はトランザクションの外の 1 文の書き込みを、やり直せるエラーのときに流し直す。
 // RETURNING 付きの書き込みは、衝突のエラーが行を読む途中で返るため、接続の層ではなくこの単位で流し直す。
 // トランザクションの中ではやり直さない(Turso は衝突でトランザクション全体を取り消すため、外側の WriteTransaction がやり直す)。
+//
+// 結果の行を 1 行でも読んだ後に失敗した場合(RowsAffected > 0)はやり直さない。GORM は読んだ行を Dest に書き込んでおり
+// (ID を埋めた要素は次の回で飛ばす、など)、そのまま流し直すと結果の対応が崩れるため。Turso の衝突は最初の行の前に返る。
 func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 	return func(db *gorm.DB) {
 		if isInsideTransaction(db) {
 			next(db)
+			if itx, ok := db.Statement.ConnPool.(*immediateTx); ok {
+				itx.markAborted(db.Error)
+			}
 			return
 		}
 		ctx := statementContext(db)
 		for attempt := 1; ; attempt++ {
 			next(db)
-			if db.Error == nil || !IsRetryableWriteError(db.Error) || attempt == p.retry.MaxAttempts {
+			if db.Error == nil || !IsRetryableWriteError(db.Error) || db.RowsAffected > 0 || attempt == p.retry.MaxAttempts {
 				return
 			}
 			wait := p.retry.backoff(attempt)
@@ -110,11 +117,9 @@ func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 	}
 }
 
-func writeRetryConfig(db *gorm.DB) (concurrent bool) {
-	if p, ok := db.Config.Plugins[writeRetryPluginName].(*writeRetryPlugin); ok {
-		return p.concurrent
-	}
-	return false
+func writeRetryPluginOf(db *gorm.DB) *writeRetryPlugin {
+	p, _ := db.Config.Plugins[writeRetryPluginName].(*writeRetryPlugin)
+	return p
 }
 
 // IsRetryableWriteError は、やり直せば通りうる書き込みのエラーかを返す。

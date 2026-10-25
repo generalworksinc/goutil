@@ -74,7 +74,7 @@ func holdConcurrentUpdate(t *testing.T, db *gorm.DB, id uint, n int, d time.Dura
 // 読んでから書くトランザクションを並行させても、更新を失わない(衝突したものはやり直される)。
 func TestUseWriteRetryConcurrentReadModifyWriteLosesNoUpdates(t *testing.T) {
 	db := openTursoMVCC(t, true)
-	if !writeRetryConfig(db) {
+	if p := writeRetryPluginOf(db); p == nil || !p.concurrent {
 		t.Fatal("MVCC の DB では BEGIN CONCURRENT を使うはず")
 	}
 	row := retryRow{N: 0}
@@ -200,7 +200,7 @@ func TestUseWriteRetryIgnoresConcurrentWithoutMVCC(t *testing.T) {
 	if err := UseWriteRetry(db, WriteRetryOptions{Concurrent: true}); err != nil {
 		t.Fatal(err)
 	}
-	if writeRetryConfig(db) {
+	if p := writeRetryPluginOf(db); p == nil || p.concurrent {
 		t.Fatal("MVCC でない DB で BEGIN CONCURRENT を使ってはいけない")
 	}
 	if err := WriteTransaction(db, func(tx *gorm.DB) error { return tx.Create(&writeTxRow{V: "a"}).Error }); err != nil {
@@ -225,5 +225,89 @@ func TestIsRetryableWriteError(t *testing.T) {
 	}
 	if !needsExclusiveTx(errors.New("Transaction error: DDL statements require an exclusive transaction")) {
 		t.Error("needsExclusiveTx")
+	}
+}
+
+// 内側の Transaction で衝突し、そのエラーを外側が握りつぶして書き込みを続けても、一部だけが残らない。
+func TestNestedConflictSwallowedByOuterDoesNotPersistPartially(t *testing.T) {
+	db := openTursoMVCC(t, true)
+	row := retryRow{N: 0}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	attempts := 0
+	fn := func(tx *gorm.DB) error {
+		attempts++
+		_ = tx.Transaction(func(tx2 *gorm.DB) error {
+			return tx2.Model(&retryRow{}).Where("id = ?", row.ID).Update("n", 9).Error
+		}) // 衝突のエラーを握りつぶす
+		return tx.Create(&retryRow{N: 100}).Error
+	}
+
+	// やり直さない設定: 衝突で失敗し、後続の Create も残らない
+	committed := holdConcurrentUpdate(t, db, row.ID, 1, 300*time.Millisecond)
+	err := WriteTransactionWithOptions(db, WriteTxOptions{MaxAttempts: 1}, fn)
+	if !isWriteConflict(err) {
+		t.Fatalf("err = %v, want Write-write conflict", err)
+	}
+	if err := <-committed; err != nil {
+		t.Fatal(err)
+	}
+	var n int64
+	db.Model(&retryRow{}).Where("n = 100").Count(&n)
+	if n != 0 {
+		t.Fatalf("取り消されたトランザクションの後続の書き込みが %d 件残った", n)
+	}
+
+	// やり直す設定: 相手のコミットの後に全体がやり直され、Create はちょうど 1 件
+	attempts = 0
+	committed = holdConcurrentUpdate(t, db, row.ID, 1, 100*time.Millisecond)
+	if err := WriteTransaction(db, fn); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-committed; err != nil {
+		t.Fatal(err)
+	}
+	db.Model(&retryRow{}).Where("n = 100").Count(&n)
+	if n != 1 || attempts < 2 {
+		t.Fatalf("rows = %d, attempts = %d", n, attempts)
+	}
+}
+
+// 結果の行を読んだ後に失敗した 1 文の書き込みは、流し直さない(Dest の対応が崩れるため)。
+func TestRetryingSkipsAfterRowsWereScanned(t *testing.T) {
+	db := openTursoMVCC(t, false)
+	p := &writeRetryPlugin{retry: WriteTxOptions{MaxAttempts: 5, BaseBackoff: time.Millisecond, MaxBackoff: time.Millisecond}}
+	for _, scanned := range []int64{0, 1} {
+		calls := 0
+		stmt := db.Session(&gorm.Session{NewDB: true})
+		p.retrying(func(d *gorm.DB) {
+			calls++
+			d.Error = errors.New("turso: error: Write-write conflict")
+			d.RowsAffected = scanned
+		})(stmt)
+		want := 5
+		if scanned > 0 {
+			want = 1
+		}
+		if calls != want {
+			t.Errorf("scanned=%d: calls = %d, want %d", scanned, calls, want)
+		}
+	}
+}
+
+// UseWriteRetry のやり直しの設定は WriteTransaction にも効く。
+func TestWriteTransactionUsesUseWriteRetryOptions(t *testing.T) {
+	db := openWriteTxDB(t, filepath.Join(t.TempDir(), "opts.db"))
+	if err := UseWriteRetry(db, WriteRetryOptions{Retry: WriteTxOptions{MaxAttempts: 3, BaseBackoff: time.Millisecond, MaxBackoff: time.Millisecond}}); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	_ = WriteTransaction(db, func(*gorm.DB) error {
+		calls++
+		return errors.New("database is locked")
+	})
+	if calls != 3 {
+		t.Fatalf("calls = %d, want 3", calls)
 	}
 }
