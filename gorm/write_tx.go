@@ -173,25 +173,26 @@ func (o WriteTxOptions) backoff(attempt int) time.Duration {
 // ErrInvalidTransaction → スキップされる。
 type immediateTx struct {
 	conn *sql.Conn
-	// endedByDB は、DB がエラーでトランザクションを終わらせたときのエラー(endsTransaction)。
+	// broken は、DB がトランザクションを終わらせた(または終わったか分からない)エラー(endsTransaction)。
 	//
 	// 保険: DB が終わらせた後の SQL は、トランザクションの外で 1 文ずつその場で確定してしまう。fn がエラーを返さずに
 	// 続けた場合(内側の Transaction のエラーを捨てた、など)に一部だけが残らないよう、以後の SQL と COMMIT を止める。
+	// ROLLBACK は必ず流す(トランザクションが続いている場合もあるため)。
 	// shortcut: Raw(...).Scan / Rows / Row のエラーは行を読む途中で返り、ここからは見えない。そのエラーを捨てて続けた
 	// 場合は守れない(fn はエラーを返すこと)。
-	endedByDB error
+	broken error
 }
 
 // noteError は、トランザクションを終わらせるエラーを受けたら記録する。
 func (t *immediateTx) noteError(err error) {
-	if t.endedByDB == nil && endsTransaction(err) {
-		t.endedByDB = err
+	if t.broken == nil && endsTransaction(err) {
+		t.broken = err
 	}
 }
 
-// endsTransaction は、DB がトランザクションを自分で終わらせるエラーかを返す。
-// Turso の MVCC の衝突(Write-write conflict)と、SQLite が自動で ROLLBACK するエラー
-// (ディスクが一杯、I/O エラー、メモリ不足、中断。https://www.sqlite.org/lang_transaction.html)。
+// endsTransaction は、DB がトランザクションを終わらせる(ことがある)エラーかを返す。
+// Turso の MVCC の衝突(Write-write conflict)は必ず終わらせる。SQLite のディスク一杯・I/O エラー・メモリ不足・中断は
+// 終わらせることも、その文だけで済むこともある(https://www.sqlite.org/lang_transaction.html#response_to_errors_within_a_transaction)。
 func endsTransaction(err error) bool {
 	if err == nil {
 		return false
@@ -211,15 +212,15 @@ var (
 )
 
 func (t *immediateTx) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	if t.endedByDB != nil {
-		return nil, t.endedByDB
+	if t.broken != nil {
+		return nil, t.broken
 	}
 	return t.conn.PrepareContext(ctx, query)
 }
 
 func (t *immediateTx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if t.endedByDB != nil {
-		return nil, t.endedByDB
+	if t.broken != nil {
+		return nil, t.broken
 	}
 	res, err := t.conn.ExecContext(ctx, query, args...)
 	t.noteError(err)
@@ -227,8 +228,8 @@ func (t *immediateTx) ExecContext(ctx context.Context, query string, args ...any
 }
 
 func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	if t.endedByDB != nil {
-		return nil, t.endedByDB
+	if t.broken != nil {
+		return nil, t.broken
 	}
 	rows, err := t.conn.QueryContext(ctx, query, args...)
 	t.noteError(err)
@@ -236,7 +237,7 @@ func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...an
 }
 
 func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	if t.endedByDB != nil {
+	if t.broken != nil {
 		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で呼んで SQL を実行させない。
 		canceled, cancel := context.WithCancel(ctx)
 		cancel()
@@ -246,18 +247,19 @@ func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ..
 }
 
 func (t *immediateTx) Commit() error {
-	if t.endedByDB != nil {
-		return t.endedByDB
+	if t.broken != nil {
+		return t.broken
 	}
 	_, err := t.conn.ExecContext(context.Background(), "COMMIT")
+	t.noteError(err) // 衝突は COMMIT の時点で返ることもある
 	return err
 }
 
 func (t *immediateTx) Rollback() error {
-	if t.endedByDB != nil {
-		return nil // DB が既に終わらせている
-	}
 	_, err := t.conn.ExecContext(context.Background(), "ROLLBACK")
+	if err != nil && t.broken != nil && containsFold(err, "no transaction is active") {
+		return nil // DB が既に終わらせていた。接続にトランザクションは残っていない
+	}
 	return err
 }
 

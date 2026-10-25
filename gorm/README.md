@@ -136,9 +136,9 @@ _ = gw_gorm.UseWriteRetry(db, gw_gorm.WriteRetryOptions{Concurrent: true})
 - トランザクションの外の 1 文の書き込み(Create / Update / Delete / Exec)も、同じエラーなら操作ごと流し直す。
   `BEGIN CONCURRENT` の途中の行に書くと、1 文の書き込みも衝突するため
 - やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは DB に何も残さない。相手の更新は DB が検知して止めるので上書きもしない
-- 保険: DB がエラーでトランザクションを終わらせた後(Turso の衝突、SQLite が自動で ROLLBACK するエラー)は、その後の SQL が
-  トランザクションの外で 1 文ずつ確定してしまう。`WriteTransaction` はそれ以後の SQL と COMMIT を止める(fn がエラーを捨てて
-  続けても一部だけが残らない)。`Raw(...).Scan` / `Rows` / `Row` のエラーを捨てた場合だけは守れないので、fn はエラーを返すこと
+- 保険: DB がエラーでトランザクションを終わらせた後(Turso の衝突。SQLite のディスク一杯などは終わらせることがある)は、その後の
+  SQL がトランザクションの外で 1 文ずつ確定してしまう。`WriteTransaction` はそれ以後の SQL と COMMIT を止め、ROLLBACK は必ず流す
+  (fn がエラーを捨てて続けても一部だけが残らない)。`Raw(...).Scan` / `Rows` / `Row` のエラーを捨てた場合だけは守れないので、fn はエラーを返すこと
 - 結果の行を読んだ後に失敗した 1 文の書き込みは流し直さない
 - `Retry` の設定は `WriteTransaction` と 1 文の書き込みの両方に効く
 - **fn の約束**: DB 外への副作用を入れない。書き込む値(モデル)は fn の中で作る(DB が取り消しても Go の値は戻らないため)。

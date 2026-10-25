@@ -327,3 +327,30 @@ func TestEndsTransaction(t *testing.T) {
 		}
 	}
 }
+
+// トランザクションを終わらせる「ことがある」エラーでは、後続の SQL は止め、ROLLBACK は実際に流す
+// (トランザクションが続いていた場合に、終わっていない接続をプールへ返さないため)。
+func TestBrokenTxStillRollsBackWhenTransactionSurvives(t *testing.T) {
+	db := openWriteTxDB(t, filepath.Join(t.TempDir(), "survive.db"))
+	err := WriteTransaction(db, func(tx *gorm.DB) error {
+		if err := tx.Create(&writeTxRow{V: "kept?"}).Error; err != nil {
+			return err
+		}
+		itx := tx.Statement.ConnPool.(*immediateTx)
+		itx.noteError(errors.New("database or disk is full")) // SQLite はこの文だけ取り消してトランザクションを続けることがある
+		if err := tx.Create(&writeTxRow{V: "after"}).Error; err == nil {
+			t.Error("壊れたトランザクションの後続の SQL は止めるはず")
+		}
+		return nil // エラーを捨てて終わる
+	})
+	if err == nil {
+		t.Fatal("COMMIT は壊れたトランザクションのエラーで失敗するはず")
+	}
+	// ROLLBACK が流れていれば、同じ接続(MaxOpenConns=1)で次の書き込みができ、最初の Create も残っていない
+	if err := WriteTransaction(db, func(tx *gorm.DB) error { return tx.Create(&writeTxRow{V: "next"}).Error }); err != nil {
+		t.Fatalf("接続にトランザクションが残っている: %v", err)
+	}
+	if n := countWriteTxRows(t, db); n != 1 {
+		t.Fatalf("rows = %d, want 1", n)
+	}
+}
