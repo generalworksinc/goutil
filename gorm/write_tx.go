@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"log/slog"
 	"math/rand/v2"
 	"strings"
@@ -177,6 +178,51 @@ type immediateTx struct {
 	// トランザクションの外で確定してしまうため、以後の SQL と COMMIT はすべてこのエラーで拒否する
 	// (内側の Transaction のエラーを fn が握りつぶして続けても、一部だけが残らないように)。
 	aborted error
+	// concurrent は BEGIN CONCURRENT で始めたトランザクションか。衝突で取り消されうるのはこちらだけ。
+	concurrent bool
+	// covered は UseWriteRetry の callback(gorm:create など)の中で実行中か。その中の QueryContext の衝突は
+	// callback が db.Error を見て拾える。それ以外の経路(Raw(...).Scan / Rows / Row)は行を読む処理が callback の外に
+	// あって衝突を拾えないため、BEGIN CONCURRENT の中では書き込みの SQL を通さない。
+	covered int
+}
+
+var errUncoveredWriteQuery = errors.New("gw_gorm: BEGIN CONCURRENT のトランザクションでは、Raw(...).Scan / Rows / Row で書き込みの SQL を流せない(衝突を検知できないため)。Create / Update / Delete か Exec を使う")
+
+// rejectQuery は QueryContext / QueryRowContext で流してはいけない SQL ならエラーを返す。
+func (t *immediateTx) rejectQuery(query string) error {
+	if t.aborted != nil {
+		return t.aborted
+	}
+	if t.concurrent && t.covered == 0 && isWriteSQL(query) {
+		return errUncoveredWriteQuery
+	}
+	return nil
+}
+
+// isWriteSQL は SQL が書き込み(INSERT / UPDATE / DELETE / REPLACE、または RETURNING 付きの WITH)かを返す。
+func isWriteSQL(query string) bool {
+	q := strings.TrimSpace(query)
+	for strings.HasPrefix(q, "--") || strings.HasPrefix(q, "/*") {
+		if strings.HasPrefix(q, "--") {
+			if i := strings.IndexByte(q, '\n'); i >= 0 {
+				q = strings.TrimSpace(q[i+1:])
+				continue
+			}
+			return false
+		}
+		if i := strings.Index(q, "*/"); i >= 0 {
+			q = strings.TrimSpace(q[i+2:])
+			continue
+		}
+		return false
+	}
+	upper := strings.ToUpper(q)
+	for _, kw := range []string{"INSERT", "UPDATE", "DELETE", "REPLACE"} {
+		if strings.HasPrefix(upper, kw) {
+			return true
+		}
+	}
+	return strings.HasPrefix(upper, "WITH") && strings.Contains(upper, "RETURNING")
 }
 
 // markAborted は衝突のエラーを受けたら、このトランザクションを取り消し済みにする。
@@ -210,15 +256,19 @@ func (t *immediateTx) ExecContext(ctx context.Context, query string, args ...any
 // QueryContext の衝突(RETURNING 付きの書き込み)は行を読む途中で返るため、ここでは拾えない。
 // UseWriteRetry の callback が db.Error を見て markAborted する。
 func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	if t.aborted != nil {
-		return nil, t.aborted
+	if err := t.rejectQuery(query); err != nil {
+		return nil, err
 	}
-	return t.conn.QueryContext(ctx, query, args...)
+	rows, err := t.conn.QueryContext(ctx, query, args...)
+	t.markAborted(err)
+	return rows, err
 }
 
 func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	if t.aborted != nil {
-		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で流して SQL を実行させない。
+	if err := t.rejectQuery(query); err != nil {
+		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で流して SQL を実行させない
+		// (Row のエラーは context canceled になる。理由はログに出す)。
+		slog.ErrorContext(ctx, "write query rejected in transaction", slog.String("reason", err.Error()))
 		canceled, cancel := context.WithCancel(ctx)
 		cancel()
 		return t.conn.QueryRowContext(canceled, query, args...)
@@ -257,7 +307,7 @@ func runWriteTx(db *gorm.DB, begin string, fn func(tx *gorm.DB) error) (err erro
 	}
 	defer conn.Close()
 
-	itx := &immediateTx{conn: conn}
+	itx := &immediateTx{conn: conn, concurrent: begin == "BEGIN CONCURRENT"}
 	tx := db.Session(&gorm.Session{Context: ctx, NewDB: true})
 	tx.Statement.ConnPool = itx
 

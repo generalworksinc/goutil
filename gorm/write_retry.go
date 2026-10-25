@@ -93,10 +93,15 @@ func (p *writeRetryPlugin) Initialize(db *gorm.DB) error {
 func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 	return func(db *gorm.DB) {
 		if isInsideTransaction(db) {
-			next(db)
-			if itx, ok := db.Statement.ConnPool.(*immediateTx); ok {
-				itx.markAborted(db.Error)
+			itx, ok := db.Statement.ConnPool.(*immediateTx)
+			if !ok {
+				next(db)
+				return
 			}
+			itx.covered++
+			next(db)
+			itx.covered--
+			itx.markAborted(db.Error)
 			return
 		}
 		ctx := statementContext(db)
