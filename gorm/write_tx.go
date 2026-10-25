@@ -33,16 +33,17 @@ func DefaultWriteTxOptions() WriteTxOptions {
 
 func (o WriteTxOptions) withDefaults() WriteTxOptions { return o.fillFrom(DefaultWriteTxOptions()) }
 
-// fillFrom はゼロ値のやり直しの設定を d で補う。
-func (o WriteTxOptions) fillFrom(d WriteTxOptions) WriteTxOptions {
+// fillFrom は、指定されていない(0 の)やり直しの回数・待ち時間を、fallback の値で埋める。
+// fallback は UseWriteRetry で決めた設定か、DefaultWriteTxOptions。
+func (o WriteTxOptions) fillFrom(fallback WriteTxOptions) WriteTxOptions {
 	if o.MaxAttempts <= 0 {
-		o.MaxAttempts = d.MaxAttempts
+		o.MaxAttempts = fallback.MaxAttempts
 	}
 	if o.BaseBackoff <= 0 {
-		o.BaseBackoff = d.BaseBackoff
+		o.BaseBackoff = fallback.BaseBackoff
 	}
 	if o.MaxBackoff <= 0 {
-		o.MaxBackoff = d.MaxBackoff
+		o.MaxBackoff = fallback.MaxBackoff
 	}
 	return o
 }
