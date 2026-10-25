@@ -18,7 +18,8 @@ import (
 // 値を使う。負の値はエラーになる。
 type WriteTxOptions struct {
 	// Immediate を true にすると、UseWriteRetry の Concurrent が有効な DB でも、このトランザクションは BEGIN IMMEDIATE で始める。
-	// 同じ行に書き込みが集中する処理(連番の採番など)に使う。衝突してやり直しを繰り返すより、順番に待つほうが速い。
+	// 使う場面: DDL(CREATE TABLE、ALTER TABLE など。BEGIN CONCURRENT の中では使えない)を流すとき。
+	// 同じ行に書き込みが集中する処理(連番の採番など)で、衝突してやり直しを繰り返すより順番に待つほうが速いとき。
 	Immediate bool
 	// MaxAttempts は BUSY 時にトランザクション全体をやり直す最大回数(初回を含む)。
 	MaxAttempts int
@@ -104,13 +105,7 @@ func WriteTransactionWithOptions(db *gorm.DB, opts WriteTxOptions, fn func(tx *g
 		opts = opts.withDefaults()
 	}
 	return retryWrite(statementContext(db), opts, func() error {
-		err := runWriteTx(db, begin, fn)
-		if begin == "BEGIN CONCURRENT" && needsExclusiveTx(err) {
-			// DDL は BEGIN CONCURRENT の中で使えない。このトランザクションは BEGIN IMMEDIATE でやり直す。
-			begin = "BEGIN IMMEDIATE"
-			return runWriteTx(db, begin, fn)
-		}
-		return err
+		return runWriteTx(db, begin, fn)
 	})
 }
 

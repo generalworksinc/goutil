@@ -156,13 +156,15 @@ func TestUseWriteRetryRetriesAutocommitWrites(t *testing.T) {
 	}
 }
 
-// DDL は BEGIN CONCURRENT の中で使えないので、BEGIN IMMEDIATE に切り替えてやり直す。
-func TestWriteTransactionFallsBackToImmediateForDDL(t *testing.T) {
+// DDL は BEGIN CONCURRENT の中で使えない。Immediate を指定したトランザクションなら流せる。
+func TestDDLNeedsImmediate(t *testing.T) {
 	db := openTursoMVCC(t, true)
 	type ddlRow struct{ ID uint }
-	if err := WriteTransaction(db, func(tx *gorm.DB) error {
-		return tx.Migrator().CreateTable(&ddlRow{})
-	}); err != nil {
+	createTable := func(tx *gorm.DB) error { return tx.Migrator().CreateTable(&ddlRow{}) }
+	if err := WriteTransaction(db, createTable); err == nil {
+		t.Fatal("BEGIN CONCURRENT の中の DDL はエラーになるはず")
+	}
+	if err := WriteTransactionWithOptions(db, WriteTxOptions{Immediate: true}, createTable); err != nil {
 		t.Fatal(err)
 	}
 	if !db.Migrator().HasTable(&ddlRow{}) {
@@ -222,9 +224,6 @@ func TestRetryableWriteErrorClassification(t *testing.T) {
 		if got := isRetryableWriteError(errors.New(msg)); got != want {
 			t.Errorf("isRetryableWriteError(%q) = %v, want %v", msg, got, want)
 		}
-	}
-	if !needsExclusiveTx(errors.New("Transaction error: DDL statements require an exclusive transaction")) {
-		t.Error("needsExclusiveTx")
 	}
 }
 

@@ -26,7 +26,7 @@ const writeRetryPluginName = "gw_gorm:write_retry"
 //
 //   - WriteTransaction: BEGIN CONCURRENT(Concurrent が有効なとき)か BEGIN IMMEDIATE で始め、衝突・ロック待ち・
 //     打ち切りで失敗したら、トランザクション全体をやり直す。DDL は BEGIN CONCURRENT の中で使えないので、
-//     その失敗は BEGIN IMMEDIATE に切り替えてやり直す
+//     DDL を流すトランザクションは WriteTxOptions{Immediate: true} で始める
 //   - トランザクションの外の 1 文の書き込み(Create / Update / Delete / Exec): 同じ理由で失敗したら、その操作を流し直す
 //
 // やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは、DB に何も残さない(トランザクションは全体が取り消され、
@@ -136,9 +136,6 @@ func isRetryableWriteError(err error) bool {
 }
 
 func isWriteConflict(err error) bool { return containsFold(err, "write-write conflict") }
-
-// needsExclusiveTx は、BEGIN CONCURRENT の中で DDL を流したときのエラーかを返す。
-func needsExclusiveTx(err error) bool { return containsFold(err, "require an exclusive transaction") }
 
 func containsFold(err error, s string) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), s)
