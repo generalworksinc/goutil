@@ -12,9 +12,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// WriteTxOptions は WriteTransactionWithOptions の SQLITE_BUSY リトライ設定。
-// ゼロ値のフィールドは DefaultWriteTxOptions の値で補われる。
+// WriteTxOptions は WriteTransactionWithOptions の設定。
+// ゼロ値のフィールドは、UseWriteRetry の設定(呼んでいなければ DefaultWriteTxOptions)で補われる。
 type WriteTxOptions struct {
+	// Immediate を true にすると、UseWriteRetry の Concurrent が有効な DB でも、このトランザクションは BEGIN IMMEDIATE で始める。
+	// 同じ行に書き込みが集中する処理(連番の採番など)に使う。衝突してやり直しを繰り返すより、順番に待つほうが速い。
+	Immediate bool
 	// MaxAttempts は BUSY 時にトランザクション全体をやり直す最大回数(初回を含む)。
 	MaxAttempts int
 	// BaseBackoff は1回目のリトライ前の待ち時間。以降は倍々に伸び、同程度までのジッタが加わる。
@@ -28,8 +31,10 @@ func DefaultWriteTxOptions() WriteTxOptions {
 	return WriteTxOptions{MaxAttempts: 6, BaseBackoff: 25 * time.Millisecond, MaxBackoff: 500 * time.Millisecond}
 }
 
-func (o WriteTxOptions) withDefaults() WriteTxOptions {
-	d := DefaultWriteTxOptions()
+func (o WriteTxOptions) withDefaults() WriteTxOptions { return o.fillFrom(DefaultWriteTxOptions()) }
+
+// fillFrom はゼロ値のやり直しの設定を d で補う。
+func (o WriteTxOptions) fillFrom(d WriteTxOptions) WriteTxOptions {
 	if o.MaxAttempts <= 0 {
 		o.MaxAttempts = d.MaxAttempts
 	}
@@ -61,14 +66,10 @@ func (o WriteTxOptions) withDefaults() WriteTxOptions {
 //
 // UseWriteRetry を呼んだ DB では、そこで指定したやり直しの設定を使う。
 func WriteTransaction(db *gorm.DB, fn func(tx *gorm.DB) error) error {
-	opts := DefaultWriteTxOptions()
-	if p := writeRetryPluginOf(db); p != nil {
-		opts = p.retry
-	}
-	return WriteTransactionWithOptions(db, opts, fn)
+	return WriteTransactionWithOptions(db, WriteTxOptions{}, fn)
 }
 
-// WriteTransactionWithOptions は WriteTransaction のリトライ設定を指定できる版。
+// WriteTransactionWithOptions は WriteTransaction の設定(Immediate、やり直しの回数と待ち時間)を指定できる版。
 func WriteTransactionWithOptions(db *gorm.DB, opts WriteTxOptions, fn func(tx *gorm.DB) error) error {
 	if db == nil {
 		return gorm.ErrInvalidDB
@@ -79,10 +80,14 @@ func WriteTransactionWithOptions(db *gorm.DB, opts WriteTxOptions, fn func(tx *g
 	if !IsSQLiteDialect(db) || isInsideTransaction(db) {
 		return db.Transaction(fn)
 	}
-	opts = opts.withDefaults()
 	begin := "BEGIN IMMEDIATE"
-	if p := writeRetryPluginOf(db); p != nil && p.concurrent {
-		begin = "BEGIN CONCURRENT"
+	if p := writeRetryPluginOf(db); p != nil {
+		opts = opts.fillFrom(p.retry)
+		if p.concurrent && !opts.Immediate {
+			begin = "BEGIN CONCURRENT"
+		}
+	} else {
+		opts = opts.withDefaults()
 	}
 	return retryWrite(statementContext(db), opts, func() error {
 		err := runWriteTx(db, begin, fn)

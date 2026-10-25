@@ -354,3 +354,47 @@ func TestBrokenTxStillRollsBackWhenTransactionSurvives(t *testing.T) {
 		t.Fatalf("rows = %d, want 1", n)
 	}
 }
+
+// Immediate を指定したトランザクション同士は、同じ行でも衝突せずに順番を待つ(やり直しを許さなくても失敗しない)。
+// 同じ処理を BEGIN CONCURRENT で行うと、やり直しを許さなければ衝突で失敗する。
+func TestImmediateOptionSerializesHotRow(t *testing.T) {
+	db := openTursoMVCC(t, true)
+	run := func(immediate bool) (n int, failures int) {
+		row := retryRow{N: 0}
+		if err := db.Create(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		for w := 0; w < 8; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < 10; i++ {
+					err := WriteTransactionWithOptions(db, WriteTxOptions{Immediate: immediate, MaxAttempts: 1}, func(tx *gorm.DB) error {
+						var r retryRow
+						if err := tx.First(&r, row.ID).Error; err != nil {
+							return err
+						}
+						return tx.Model(&r).Update("n", r.N+1).Error
+					})
+					if err != nil {
+						mu.Lock()
+						failures++
+						mu.Unlock()
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		var got retryRow
+		db.First(&got, row.ID)
+		return got.N, failures
+	}
+	if n, failures := run(true); n != 80 || failures != 0 {
+		t.Fatalf("Immediate: n = %d, failures = %d, want 80, 0", n, failures)
+	}
+	if _, failures := run(false); failures == 0 {
+		t.Log("BEGIN CONCURRENT でも衝突が起きなかった(負荷が足りない)。Immediate の側の結果だけを判定に使う")
+	}
+}

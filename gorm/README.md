@@ -140,6 +140,8 @@ _ = gw_gorm.UseWriteRetry(db, gw_gorm.WriteRetryOptions{Concurrent: true})
   SQL がトランザクションの外で 1 文ずつ確定してしまう。`WriteTransaction` はそれ以後の SQL と COMMIT を止め、ROLLBACK は必ず流す
   (fn がエラーを捨てて続けても一部だけが残らない)。`Raw(...).Scan` / `Rows` / `Row` のエラーを捨てた場合だけは守れないので、fn はエラーを返すこと
 - 結果の行を読んだ後に失敗した 1 文の書き込みは流し直さない
+- 同じ行に書き込みが集中する処理(連番の採番など)は `WriteTransactionWithOptions(db, gw_gorm.WriteTxOptions{Immediate: true}, fn)` で
+  `BEGIN IMMEDIATE` にする。衝突してやり直しを繰り返すより、順番に待つほうが速い
 - `Retry` の設定は `WriteTransaction` と 1 文の書き込みの両方に効く
 - **fn の約束**: DB 外への副作用を入れない。書き込む値(モデル)は fn の中で作る(DB が取り消しても Go の値は戻らないため)。
   fn の外の変数には、成功した後に結果を入れる
