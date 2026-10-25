@@ -97,6 +97,12 @@ func (p *writeRetryPlugin) Initialize(db *gorm.DB) error {
 // Turso の衝突は最初の行を読む前に返るので、通常はやり直せる。
 func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 	return func(db *gorm.DB) {
+		if db.Error != nil {
+			// 前段(BeforeCreate などのフック)のエラー。この操作は実行されていないので、やり直さずにそのまま返す
+			// (消してしまうと、フックを飛ばして書き込みだけが流れる)。
+			next(db)
+			return
+		}
 		if isInsideTransaction(db) {
 			next(db)
 			// RETURNING 付きの書き込みのエラーは行を読む途中で返り、接続の層からは見えない。そのためここで記録する。

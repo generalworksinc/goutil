@@ -399,3 +399,26 @@ func TestImmediateOptionSerializesHotRow(t *testing.T) {
 		t.Log("BEGIN CONCURRENT でも衝突が起きなかった(負荷が足りない)。Immediate の側の結果だけを判定に使う")
 	}
 }
+
+type busyHookRow struct {
+	ID uint `gorm:"primaryKey"`
+	V  string
+}
+
+func (busyHookRow) BeforeCreate(*gorm.DB) error { return errors.New("database is locked") }
+
+// 前段のフックのやり直せるエラーを、書き込みの失敗と取り違えない(フックを飛ばして書き込みだけを流さない)。
+func TestRetryingDoesNotSwallowHookErrors(t *testing.T) {
+	db := openTursoMVCC(t, false)
+	if err := db.AutoMigrate(&busyHookRow{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&busyHookRow{V: "x"}).Error; err == nil {
+		t.Fatal("BeforeCreate のエラーが返るはず")
+	}
+	var n int64
+	db.Model(&busyHookRow{}).Count(&n)
+	if n != 0 {
+		t.Fatalf("rows = %d, want 0", n)
+	}
+}
