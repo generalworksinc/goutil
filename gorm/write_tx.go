@@ -13,7 +13,8 @@ import (
 )
 
 // WriteTxOptions は WriteTransactionWithOptions の設定。
-// 0 のままの欄は、UseWriteRetry の設定(呼んでいなければ DefaultWriteTxOptions)の値を使う。
+// MaxAttempts・BaseBackoff・MaxBackoff が 0 以下(未指定のゼロ値を含む)なら、UseWriteRetry の設定
+// (呼んでいなければ DefaultWriteTxOptions)の値を使う。Immediate はそのまま使う。
 type WriteTxOptions struct {
 	// Immediate を true にすると、UseWriteRetry の Concurrent が有効な DB でも、このトランザクションは BEGIN IMMEDIATE で始める。
 	// 同じ行に書き込みが集中する処理(連番の採番など)に使う。衝突してやり直しを繰り返すより、順番に待つほうが速い。
@@ -33,7 +34,7 @@ func DefaultWriteTxOptions() WriteTxOptions {
 
 func (o WriteTxOptions) withDefaults() WriteTxOptions { return o.fillFrom(DefaultWriteTxOptions()) }
 
-// fillFrom は、指定されていない(0 の)やり直しの回数・待ち時間を、fallback の値で埋める。
+// fillFrom は、0 以下(未指定のゼロ値を含む)のやり直しの回数・待ち時間を、fallback の値で埋める。
 // fallback は UseWriteRetry で決めた設定か、DefaultWriteTxOptions。
 func (o WriteTxOptions) fillFrom(fallback WriteTxOptions) WriteTxOptions {
 	if o.MaxAttempts <= 0 {

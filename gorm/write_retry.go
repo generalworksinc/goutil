@@ -15,7 +15,8 @@ type WriteRetryOptions struct {
 	// WriteTransaction を BEGIN CONCURRENT で始め、別々の行への書き込みを並行させる。
 	// それ以外の DB(SQLite、libSQL など)では無視され、BEGIN IMMEDIATE のまま動く。
 	Concurrent bool
-	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。0 のままの欄は DefaultWriteTxOptions の値を使う。
+	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。
+	// MaxAttempts・BaseBackoff・MaxBackoff が 0 以下(未指定のゼロ値を含む)なら、DefaultWriteTxOptions の値を使う。
 	Retry WriteTxOptions
 }
 
