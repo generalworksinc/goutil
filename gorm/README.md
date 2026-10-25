@@ -119,3 +119,31 @@ SQLite 系(ローカル SQLite / Turso libsql。dialect 名が `sqlite`)では�
 
 callback はやり直されることがあるため、**DB 外への副作用(通知送信・ファイル書き込みなど)を入れない**こと。
 `IsSQLiteBusyError(err)` / `IsSQLiteDialect(db)` は単体でも使える。
+
+## UseWriteRetry — 衝突のやり直しと Turso の並行書き込み
+
+DB を開いた直後に一度だけ呼ぶ。以後、利用側は書き込みの衝突を意識しなくてよい。
+
+```go
+db, _ := gorm.Open(dialector, gw_gorm.DefaultConfig(false))
+_ = gw_gorm.UseWriteRetry(db, gw_gorm.WriteRetryOptions{Concurrent: true})
+```
+
+- `Concurrent: true` で、DB が Turso Database の MVCC(`PRAGMA journal_mode` が `mvcc`)なら、`WriteTransaction` を
+  `BEGIN CONCURRENT` で始め、別々の行への書き込みを並行させる。それ以外の DB(SQLite・libSQL)では無視され、`BEGIN IMMEDIATE` のまま
+- `WriteTransaction` は、ロック待ち・衝突(`Write-write conflict`)・libSQL の打ち切り(`Transaction timed out`)で
+  失敗したらトランザクション全体をやり直す
+- トランザクションの外の 1 文の書き込み(Create / Update / Delete / Exec)も、同じエラーなら操作ごと流し直す。
+  `BEGIN CONCURRENT` の途中の行に書くと、1 文の書き込みも衝突することがあるため
+- やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは、DB に何も残さない。衝突した相手の更新を上書きすることもない(DB が衝突を検知して止める)
+- 保険: DB がエラーでトランザクションを終わらせた後(Turso の衝突、SQLite のディスク一杯など)は、その後の
+  SQL がトランザクションの外で 1 文ずつ確定してしまう。`WriteTransaction` はそれ以後の SQL と COMMIT を止め、ROLLBACK は必ず流す
+  (fn がエラーを捨てて続けても、一部だけが残ることはない)。`Raw(...).Scan` / `Rows` / `Row` のエラーを捨てた場合だけは守れないので、fn はエラーを返すこと
+- 結果の行を読んだ後に失敗した 1 文の書き込みは流し直さない
+- 次のトランザクションは `WriteTransactionWithOptions(db, gw_gorm.WriteTxOptions{Immediate: true}, fn)` で `BEGIN IMMEDIATE` にする
+  - DDL(CREATE TABLE、ALTER TABLE など)を流すとき。`BEGIN CONCURRENT` の中では使えない(migration など)
+  - 同じ行に書き込みが集中する処理(連番の採番など)。衝突してやり直しを繰り返すより、順番に待つほうが速い
+- `Retry` の設定は `WriteTransaction` と 1 文の書き込みの両方に効く
+- **fn の約束**: DB の外への副作用を入れない。書き込む値(モデル)は fn の中で作る(DB が取り消しても Go の値は戻らないため)。
+  fn の外の変数には、成功した後に結果を入れる
+- GORM の既定のトランザクションは使わない設定にする(`SkipDefaultTransaction`)。複数の SQL になる書き込みは `WriteTransaction` で包む

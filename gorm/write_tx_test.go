@@ -224,7 +224,7 @@ func TestRetryOnSQLiteBusyRetriesOnlyBusyErrors(t *testing.T) {
 	busy := errors.New("failed to execute SQL:\nSQLite error: database is locked")
 
 	calls := 0
-	err := retryOnSQLiteBusy(context.Background(), opts, func() error {
+	err := retryWrite(context.Background(), opts, func() error {
 		calls++
 		if calls < 3 {
 			return busy
@@ -237,7 +237,7 @@ func TestRetryOnSQLiteBusyRetriesOnlyBusyErrors(t *testing.T) {
 
 	calls = 0
 	other := errors.New("UNIQUE constraint failed")
-	if err := retryOnSQLiteBusy(context.Background(), opts, func() error {
+	if err := retryWrite(context.Background(), opts, func() error {
 		calls++
 		return other
 	}); !errors.Is(err, other) || calls != 1 {
@@ -245,7 +245,7 @@ func TestRetryOnSQLiteBusyRetriesOnlyBusyErrors(t *testing.T) {
 	}
 
 	calls = 0
-	if err := retryOnSQLiteBusy(context.Background(), opts, func() error {
+	if err := retryWrite(context.Background(), opts, func() error {
 		calls++
 		return busy
 	}); !errors.Is(err, busy) || calls != opts.MaxAttempts {
@@ -255,7 +255,7 @@ func TestRetryOnSQLiteBusyRetriesOnlyBusyErrors(t *testing.T) {
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 	calls = 0
-	if err := retryOnSQLiteBusy(cancelled, opts, func() error {
+	if err := retryWrite(cancelled, opts, func() error {
 		calls++
 		return busy
 	}); !errors.Is(err, busy) || calls != 1 {
@@ -274,6 +274,21 @@ func TestWriteTxOptionsDefaultsAndBackoff(t *testing.T) {
 		if wait < 10*time.Millisecond || wait > max {
 			t.Errorf("attempt %d: wait %v out of range", attempt, wait)
 		}
+	}
+}
+
+func TestNegativeWriteTxOptionsAreRejected(t *testing.T) {
+	db := openWriteTxDB(t, filepath.Join(t.TempDir(), "neg.db"))
+	ran := false
+	err := WriteTransactionWithOptions(db, WriteTxOptions{MaxAttempts: -1}, func(*gorm.DB) error {
+		ran = true
+		return nil
+	})
+	if err == nil || ran {
+		t.Fatalf("負の MaxAttempts は fn を実行せずエラーにするはず: err=%v ran=%v", err, ran)
+	}
+	if err := UseWriteRetry(db, WriteRetryOptions{Retry: WriteTxOptions{BaseBackoff: -time.Millisecond}}); err == nil {
+		t.Fatal("負の待ち時間は UseWriteRetry でエラーにするはず")
 	}
 }
 
