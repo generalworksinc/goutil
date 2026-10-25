@@ -311,7 +311,7 @@ func TestWriteTransactionUsesUseWriteRetryOptions(t *testing.T) {
 	}
 }
 
-func TestEndsTransaction(t *testing.T) {
+func TestMarkBrokenIfEnded(t *testing.T) {
 	for msg, want := range map[string]bool{
 		"turso: error: Write-write conflict":     true,
 		"database or disk is full":               true,
@@ -321,8 +321,10 @@ func TestEndsTransaction(t *testing.T) {
 		"database is locked":                     false, // BEGIN IMMEDIATE で待つ側のエラー。トランザクションは続く
 		"UNIQUE constraint failed: retry_row.id": false, // その文だけが失敗し、トランザクションは続く
 	} {
-		if got := endsTransaction(errors.New(msg)); got != want {
-			t.Errorf("endsTransaction(%q) = %v, want %v", msg, got, want)
+		tx := &immediateTx{}
+		tx.markBrokenIfEnded(errors.New(msg))
+		if got := tx.broken != nil; got != want {
+			t.Errorf("markBrokenIfEnded(%q): broken = %v, want %v", msg, got, want)
 		}
 	}
 }

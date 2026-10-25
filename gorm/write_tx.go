@@ -187,7 +187,7 @@ func (o WriteTxOptions) backoff(attempt int) time.Duration {
 // ErrInvalidTransaction → スキップされる。
 type immediateTx struct {
 	conn *sql.Conn
-	// broken は、DB がトランザクションを終わらせた、または終わらせたかもしれないエラー(endsTransaction で判定する)。
+	// broken は、DB がトランザクションを終わらせた、または終わらせたかもしれないエラー(markBrokenIfEnded で記録する)。
 	//
 	// 保険: DB が終わらせた後の SQL は、トランザクションの外で 1 文ずつその場で確定してしまう。fn がエラーを返さずに
 	// 続けた場合(内側の Transaction のエラーを捨てた、など)に一部だけが残らないよう、以後の SQL と COMMIT を止める。
@@ -197,27 +197,20 @@ type immediateTx struct {
 	broken error
 }
 
-// markBrokenIfEnded は、err がトランザクションを終わらせる(ことがある)エラー(endsTransaction)なら、broken に記録する。
-func (t *immediateTx) markBrokenIfEnded(err error) {
-	if t.broken == nil && endsTransaction(err) {
-		t.broken = err
-	}
-}
-
-// endsTransaction は、DB がトランザクションを終わらせる(ことがある)エラーかを返す。
+// markBrokenIfEnded は、err が DB にトランザクションを終わらせる(ことがある)エラーなら、broken に記録する。
 // Turso の MVCC の衝突(Write-write conflict)は必ず終わらせる。SQLite のディスク一杯・I/O エラー・メモリ不足・中断は
 // 終わらせることも、その文だけで済むこともある(https://www.sqlite.org/lang_transaction.html#response_to_errors_within_a_transaction)。
-func endsTransaction(err error) bool {
-	if err == nil {
-		return false
+func (t *immediateTx) markBrokenIfEnded(err error) {
+	if t.broken != nil || err == nil {
+		return
 	}
 	msg := strings.ToLower(err.Error())
 	for _, s := range []string{"write-write conflict", "database or disk is full", "disk i/o error", "out of memory", "interrupted"} {
 		if strings.Contains(msg, s) {
-			return true
+			t.broken = err
+			return
 		}
 	}
-	return false
 }
 
 var (
