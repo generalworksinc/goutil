@@ -144,4 +144,3 @@ _ = gw_gorm.UseWriteRetry(db, gw_gorm.WriteRetryOptions{Concurrent: true})
 - **fn の約束**: DB 外への副作用を入れない。書き込む値(モデル)は fn の中で作る(DB が取り消しても Go の値は戻らないため)。
   fn の外の変数には、成功した後に結果を入れる
 - GORM の既定のトランザクション(`SkipDefaultTransaction`)は切る。複数の SQL になる書き込みは `WriteTransaction` で包む
-- やり直せるエラーかは `IsRetryableWriteError(err)` で判定できる

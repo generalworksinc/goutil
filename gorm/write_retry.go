@@ -107,7 +107,7 @@ func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 		ctx := statementContext(db)
 		for attempt := 1; ; attempt++ {
 			next(db)
-			if db.Error == nil || !IsRetryableWriteError(db.Error) || db.RowsAffected > 0 || attempt == p.retry.MaxAttempts {
+			if db.Error == nil || !isRetryableWriteError(db.Error) || db.RowsAffected > 0 || attempt == p.retry.MaxAttempts {
 				return
 			}
 			wait := p.retry.backoff(attempt)
@@ -127,10 +127,10 @@ func writeRetryPluginOf(db *gorm.DB) *writeRetryPlugin {
 	return p
 }
 
-// IsRetryableWriteError は、やり直せば通りうる書き込みのエラーかを返す。
+// isRetryableWriteError は、やり直せば通りうる書き込みのエラーかを返す。
 // ロック待ち(database is locked / busy)、Turso の MVCC の衝突(Write-write conflict)、
 // libSQL のサーバーが他の書き込みを待たせすぎたトランザクションを打ち切ったとき(Transaction timed out)。
-func IsRetryableWriteError(err error) bool {
+func isRetryableWriteError(err error) bool {
 	return IsSQLiteBusyError(err) || isWriteConflict(err) || containsFold(err, "transaction timed out")
 }
 

@@ -128,12 +128,12 @@ func statementContext(db *gorm.DB) context.Context {
 	return context.Background()
 }
 
-// retryWrite は fn がやり直せるエラー(IsRetryableWriteError)で失敗した場合に限り、バックオフ付きでやり直す。
+// retryWrite は fn がやり直せるエラー(isRetryableWriteError)で失敗した場合に限り、バックオフ付きでやり直す。
 func retryWrite(ctx context.Context, opts WriteTxOptions, fn func() error) error {
 	var err error
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		err = fn()
-		if err == nil || !IsRetryableWriteError(err) {
+		if err == nil || !isRetryableWriteError(err) {
 			return err
 		}
 		if attempt == opts.MaxAttempts {
@@ -200,48 +200,21 @@ func (t *immediateTx) rejectQuery(query string) error {
 	return nil
 }
 
-// isWriteSQL は SQL が書き込みになりうるかを返す。読み取りと分かるもの(SELECT・EXPLAIN・VALUES、値を設定しない PRAGMA、
-// INSERT / UPDATE / DELETE / REPLACE の語を含まない WITH)以外は、保守的に書き込みとみなす
-// (WITH x AS (...) UPDATE ... のように RETURNING が無くても書く SQL があるため)。
+// isWriteSQL は SQL が書き込みになりうるかを返す。SELECT・WITH・EXPLAIN・VALUES、値を設定しない PRAGMA のどれかで始まり、
+// INSERT / UPDATE / DELETE / REPLACE の語を含まないものだけを読み取りとする。
+// shortcut: 先頭のコメントや、文字列の中のこれらの語も書き込みとみなす(止める側に倒れるだけなので安全)。読み取りの Raw が
+// 止められて困る例が出たら、字句を解析する判定にする。
 func isWriteSQL(query string) bool {
-	q := strings.TrimSpace(query)
-	for strings.HasPrefix(q, "--") || strings.HasPrefix(q, "/*") {
-		if strings.HasPrefix(q, "--") {
-			i := strings.IndexByte(q, '\n')
-			if i < 0 {
-				return false
-			}
-			q = strings.TrimSpace(q[i+1:])
-			continue
-		}
-		i := strings.Index(q, "*/")
-		if i < 0 {
-			return false
-		}
-		q = strings.TrimSpace(q[i+2:])
-	}
-	upper := strings.ToUpper(q)
-	switch {
-	case hasKeyword(upper, "SELECT"), hasKeyword(upper, "EXPLAIN"), hasKeyword(upper, "VALUES"):
-		return false
-	case hasKeyword(upper, "PRAGMA"):
-		return strings.Contains(upper, "=")
-	case hasKeyword(upper, "WITH"):
-		return dmlWord.MatchString(upper)
-	}
-	return true
+	q := strings.ToUpper(strings.TrimSpace(query))
+	readOnly := readOnlyStart.MatchString(q) && !dmlWord.MatchString(q) &&
+		!(strings.HasPrefix(q, "PRAGMA") && strings.Contains(q, "="))
+	return !readOnly
 }
 
-var dmlWord = regexp.MustCompile(`\b(INSERT|UPDATE|DELETE|REPLACE)\b`)
-
-// hasKeyword は upper が kw の語で始まるかを返す。
-func hasKeyword(upper, kw string) bool {
-	if !strings.HasPrefix(upper, kw) {
-		return false
-	}
-	rest := upper[len(kw):]
-	return rest == "" || !(rest[0] == '_' || rest[0] >= 'A' && rest[0] <= 'Z' || rest[0] >= '0' && rest[0] <= '9')
-}
+var (
+	readOnlyStart = regexp.MustCompile(`^(SELECT|WITH|EXPLAIN|VALUES|PRAGMA)\b`)
+	dmlWord       = regexp.MustCompile(`\b(INSERT|UPDATE|DELETE|REPLACE)\b`)
+)
 
 // markAborted は衝突のエラーを受けたら、このトランザクションを取り消し済みにする。
 func (t *immediateTx) markAborted(err error) {

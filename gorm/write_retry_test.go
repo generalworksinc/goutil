@@ -208,7 +208,7 @@ func TestUseWriteRetryIgnoresConcurrentWithoutMVCC(t *testing.T) {
 	}
 }
 
-func TestIsRetryableWriteError(t *testing.T) {
+func TestRetryableWriteErrorClassification(t *testing.T) {
 	for msg, want := range map[string]bool{
 		"database is locked (5) (SQLITE_BUSY)":                     true,
 		"failed to execute SQL:\nSQLite error: database is locked": true,
@@ -219,8 +219,8 @@ func TestIsRetryableWriteError(t *testing.T) {
 		"UNIQUE constraint failed: retry_row.id":                   false,
 		"Transaction error: DDL statements require an exclusive transaction (use BEGIN instead of BEGIN CONCURRENT)": false,
 	} {
-		if got := IsRetryableWriteError(errors.New(msg)); got != want {
-			t.Errorf("IsRetryableWriteError(%q) = %v, want %v", msg, got, want)
+		if got := isRetryableWriteError(errors.New(msg)); got != want {
+			t.Errorf("isRetryableWriteError(%q) = %v, want %v", msg, got, want)
 		}
 	}
 	if !needsExclusiveTx(errors.New("Transaction error: DDL statements require an exclusive transaction")) {
@@ -357,7 +357,7 @@ func TestConcurrentTxRejectsUncoveredWriteQueries(t *testing.T) {
 func TestIsWriteSQL(t *testing.T) {
 	for q, want := range map[string]bool{
 		"INSERT INTO t VALUES (1)": true, "  update t set a=1": true, "DELETE FROM t": true, "REPLACE INTO t VALUES (1)": true,
-		"-- note\nUPDATE t SET a=1": true, "/* x */ insert into t values(1)": true,
+		"-- note\nUPDATE t SET a=1": true, "/* x */ insert into t values(1)": true, "/* c */ SELECT 1": true,
 		"WITH x AS (SELECT 1) UPDATE t SET a=1 RETURNING a": true, "WITH x AS (SELECT 1) SELECT * FROM x": false,
 		"WITH x AS (SELECT 1) UPDATE retry_row SET n=9 WHERE id=1": true, "with recursive c(n) as (select 1) delete from t": true,
 		"SELECT * FROM t": false, "select updated_at from t": false, "PRAGMA journal_mode": false, "PRAGMA journal_mode = 'mvcc'": true,
