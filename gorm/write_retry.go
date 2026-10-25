@@ -93,15 +93,11 @@ func (p *writeRetryPlugin) Initialize(db *gorm.DB) error {
 func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 	return func(db *gorm.DB) {
 		if isInsideTransaction(db) {
-			itx, ok := db.Statement.ConnPool.(*immediateTx)
-			if !ok {
-				next(db)
-				return
-			}
-			itx.covered++
 			next(db)
-			itx.covered--
-			itx.markAborted(db.Error)
+			// RETURNING 付きの書き込みのエラーは行を読む途中で返るので、接続の層では見えない。ここで記録する。
+			if itx, ok := db.Statement.ConnPool.(*immediateTx); ok {
+				itx.noteError(db.Error)
+			}
 			return
 		}
 		ctx := statementContext(db)

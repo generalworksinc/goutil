@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"log/slog"
 	"math/rand/v2"
-	"regexp"
 	"strings"
 	"time"
 
@@ -175,52 +173,36 @@ func (o WriteTxOptions) backoff(attempt int) time.Duration {
 // ErrInvalidTransaction → スキップされる。
 type immediateTx struct {
 	conn *sql.Conn
-	// aborted は DB が取り消したトランザクション(Turso の MVCC の衝突)のエラー。取り消された後の SQL は
-	// トランザクションの外で確定してしまうため、以後の SQL と COMMIT はすべてこのエラーで拒否する
-	// (内側の Transaction のエラーを fn が握りつぶして続けても、一部だけが残らないように)。
-	aborted error
-	// concurrent は BEGIN CONCURRENT で始めたトランザクションか。衝突で取り消されうるのはこちらだけ。
-	concurrent bool
-	// covered は UseWriteRetry の callback(gorm:create など)の中で実行中か。その中の QueryContext の衝突は
-	// callback が db.Error を見て拾える。それ以外の経路(Raw(...).Scan / Rows / Row)は行を読む処理が callback の外に
-	// あって衝突を拾えないため、BEGIN CONCURRENT の中では書き込みの SQL を通さない。
-	covered int
+	// endedByDB は、DB がエラーでトランザクションを終わらせたときのエラー(endsTransaction)。
+	//
+	// 保険: DB が終わらせた後の SQL は、トランザクションの外で 1 文ずつその場で確定してしまう。fn がエラーを返さずに
+	// 続けた場合(内側の Transaction のエラーを捨てた、など)に一部だけが残らないよう、以後の SQL と COMMIT を止める。
+	// shortcut: Raw(...).Scan / Rows / Row のエラーは行を読む途中で返り、ここからは見えない。そのエラーを捨てて続けた
+	// 場合は守れない(fn はエラーを返すこと)。
+	endedByDB error
 }
 
-var errUncoveredWriteQuery = errors.New("gw_gorm: BEGIN CONCURRENT のトランザクションでは、Raw(...).Scan / Rows / Row で書き込みの SQL を流せない(衝突を検知できないため)。Create / Update / Delete か Exec を使う")
-
-// rejectQuery は QueryContext / QueryRowContext で流してはいけない SQL ならエラーを返す。
-func (t *immediateTx) rejectQuery(query string) error {
-	if t.aborted != nil {
-		return t.aborted
+// noteError は、トランザクションを終わらせるエラーを受けたら記録する。
+func (t *immediateTx) noteError(err error) {
+	if t.endedByDB == nil && endsTransaction(err) {
+		t.endedByDB = err
 	}
-	if t.concurrent && t.covered == 0 && isWriteSQL(query) {
-		return errUncoveredWriteQuery
-	}
-	return nil
 }
 
-// isWriteSQL は SQL が書き込みになりうるかを返す。SELECT・WITH・EXPLAIN・VALUES、値を設定しない PRAGMA のどれかで始まり、
-// INSERT / UPDATE / DELETE / REPLACE の語を含まないものだけを読み取りとする。
-// shortcut: 先頭のコメントや、文字列の中のこれらの語も書き込みとみなす(止める側に倒れるだけなので安全)。読み取りの Raw が
-// 止められて困る例が出たら、字句を解析する判定にする。
-func isWriteSQL(query string) bool {
-	q := strings.ToUpper(strings.TrimSpace(query))
-	readOnly := readOnlyStart.MatchString(q) && !dmlWord.MatchString(q) &&
-		!(strings.HasPrefix(q, "PRAGMA") && strings.Contains(q, "="))
-	return !readOnly
-}
-
-var (
-	readOnlyStart = regexp.MustCompile(`^(SELECT|WITH|EXPLAIN|VALUES|PRAGMA)\b`)
-	dmlWord       = regexp.MustCompile(`\b(INSERT|UPDATE|DELETE|REPLACE)\b`)
-)
-
-// markAborted は衝突のエラーを受けたら、このトランザクションを取り消し済みにする。
-func (t *immediateTx) markAborted(err error) {
-	if t.aborted == nil && isWriteConflict(err) {
-		t.aborted = err
+// endsTransaction は、DB がトランザクションを自分で終わらせるエラーかを返す。
+// Turso の MVCC の衝突(Write-write conflict)と、SQLite が自動で ROLLBACK するエラー
+// (ディスクが一杯、I/O エラー、メモリ不足、中断。https://www.sqlite.org/lang_transaction.html)。
+func endsTransaction(err error) bool {
+	if err == nil {
+		return false
 	}
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{"write-write conflict", "database or disk is full", "disk i/o error", "out of memory", "interrupted"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 var (
@@ -229,37 +211,33 @@ var (
 )
 
 func (t *immediateTx) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	if t.aborted != nil {
-		return nil, t.aborted
+	if t.endedByDB != nil {
+		return nil, t.endedByDB
 	}
 	return t.conn.PrepareContext(ctx, query)
 }
 
 func (t *immediateTx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	if t.aborted != nil {
-		return nil, t.aborted
+	if t.endedByDB != nil {
+		return nil, t.endedByDB
 	}
 	res, err := t.conn.ExecContext(ctx, query, args...)
-	t.markAborted(err)
+	t.noteError(err)
 	return res, err
 }
 
-// QueryContext の衝突(RETURNING 付きの書き込み)は行を読む途中で返るため、ここでは拾えない。
-// UseWriteRetry の callback が db.Error を見て markAborted する。
 func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	if err := t.rejectQuery(query); err != nil {
-		return nil, err
+	if t.endedByDB != nil {
+		return nil, t.endedByDB
 	}
 	rows, err := t.conn.QueryContext(ctx, query, args...)
-	t.markAborted(err)
+	t.noteError(err)
 	return rows, err
 }
 
 func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	if err := t.rejectQuery(query); err != nil {
-		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で流して SQL を実行させない
-		// (Row のエラーは context canceled になる。理由はログに出す)。
-		slog.ErrorContext(ctx, "write query rejected in transaction", slog.String("reason", err.Error()))
+	if t.endedByDB != nil {
+		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で呼んで SQL を実行させない。
 		canceled, cancel := context.WithCancel(ctx)
 		cancel()
 		return t.conn.QueryRowContext(canceled, query, args...)
@@ -268,16 +246,16 @@ func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ..
 }
 
 func (t *immediateTx) Commit() error {
-	if t.aborted != nil {
-		return t.aborted
+	if t.endedByDB != nil {
+		return t.endedByDB
 	}
 	_, err := t.conn.ExecContext(context.Background(), "COMMIT")
 	return err
 }
 
 func (t *immediateTx) Rollback() error {
-	if t.aborted != nil {
-		return nil // DB が既に取り消している
+	if t.endedByDB != nil {
+		return nil // DB が既に終わらせている
 	}
 	_, err := t.conn.ExecContext(context.Background(), "ROLLBACK")
 	return err
@@ -298,7 +276,7 @@ func runWriteTx(db *gorm.DB, begin string, fn func(tx *gorm.DB) error) (err erro
 	}
 	defer conn.Close()
 
-	itx := &immediateTx{conn: conn, concurrent: begin == "BEGIN CONCURRENT"}
+	itx := &immediateTx{conn: conn}
 	tx := db.Session(&gorm.Session{Context: ctx, NewDB: true})
 	tx.Statement.ConnPool = itx
 

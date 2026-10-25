@@ -312,59 +312,18 @@ func TestWriteTransactionUsesUseWriteRetryOptions(t *testing.T) {
 	}
 }
 
-// BEGIN CONCURRENT の中で Raw(...).Scan / Row に書き込みの SQL を流すと拒否する(衝突を検知できないため)。
-// Create(RETURNING を使う)と Exec、読み取りの Raw は通る。
-func TestConcurrentTxRejectsUncoveredWriteQueries(t *testing.T) {
-	db := openTursoMVCC(t, true)
-	row := retryRow{N: 0}
-	if err := db.Create(&row).Error; err != nil {
-		t.Fatal(err)
-	}
-	err := WriteTransaction(db, func(tx *gorm.DB) error {
-		var n int
-		if err := tx.Raw("UPDATE retry_row SET n = 1 WHERE id = ? RETURNING n", row.ID).Scan(&n).Error; !errors.Is(err, errUncoveredWriteQuery) {
-			t.Errorf("Raw UPDATE RETURNING Scan: err = %v", err)
-		}
-		if err := tx.Raw("/* c */ INSERT INTO retry_row (n) VALUES (5) RETURNING id").Row().Scan(&n); err == nil {
-			t.Error("Raw INSERT RETURNING Row は拒否されるはず")
-		}
-		if err := tx.Raw("WITH x AS (SELECT 1) UPDATE retry_row SET n = 9 WHERE id = ?", row.ID).Scan(&n).Error; !errors.Is(err, errUncoveredWriteQuery) {
-			t.Errorf("RETURNING の無い CTE の UPDATE を Raw Scan: err = %v", err)
-		}
-		if err := tx.Raw("SELECT n FROM retry_row WHERE id = ?", row.ID).Scan(&n).Error; err != nil {
-			t.Errorf("読み取りの Raw: %v", err)
-		}
-		if err := tx.Create(&retryRow{N: 2}).Error; err != nil {
-			t.Errorf("Create(RETURNING): %v", err)
-		}
-		return tx.Exec("UPDATE retry_row SET n = 3 WHERE id = ?", row.ID).Error
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var count int64
-	var got retryRow
-	db.First(&got, row.ID)
-	if got.N != 3 {
-		t.Fatalf("n = %d, want 3(拒否した CTE の UPDATE は流れない)", got.N)
-	}
-	db.Model(&retryRow{}).Count(&count)
-	if count != 2 {
-		t.Fatalf("rows = %d, want 2(拒否した INSERT は流れない)", count)
-	}
-}
-
-func TestIsWriteSQL(t *testing.T) {
-	for q, want := range map[string]bool{
-		"INSERT INTO t VALUES (1)": true, "  update t set a=1": true, "DELETE FROM t": true, "REPLACE INTO t VALUES (1)": true,
-		"-- note\nUPDATE t SET a=1": true, "/* x */ insert into t values(1)": true, "/* c */ SELECT 1": true,
-		"WITH x AS (SELECT 1) UPDATE t SET a=1 RETURNING a": true, "WITH x AS (SELECT 1) SELECT * FROM x": false,
-		"WITH x AS (SELECT 1) UPDATE retry_row SET n=9 WHERE id=1": true, "with recursive c(n) as (select 1) delete from t": true,
-		"SELECT * FROM t": false, "select updated_at from t": false, "PRAGMA journal_mode": false, "PRAGMA journal_mode = 'mvcc'": true,
-		"EXPLAIN SELECT 1": false, "VALUES (1)": false, "CREATE TABLE t (id int)": true, "": true,
+func TestEndsTransaction(t *testing.T) {
+	for msg, want := range map[string]bool{
+		"turso: error: Write-write conflict":     true,
+		"database or disk is full":               true,
+		"disk I/O error":                         true,
+		"out of memory":                          true,
+		"interrupted":                            true,
+		"database is locked":                     false, // BEGIN IMMEDIATE で待つ側のエラー。トランザクションは続く
+		"UNIQUE constraint failed: retry_row.id": false, // その文だけが失敗し、トランザクションは続く
 	} {
-		if got := isWriteSQL(q); got != want {
-			t.Errorf("isWriteSQL(%q) = %v, want %v", q, got, want)
+		if got := endsTransaction(errors.New(msg)); got != want {
+			t.Errorf("endsTransaction(%q) = %v, want %v", msg, got, want)
 		}
 	}
 }
