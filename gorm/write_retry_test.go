@@ -328,6 +328,9 @@ func TestConcurrentTxRejectsUncoveredWriteQueries(t *testing.T) {
 		if err := tx.Raw("/* c */ INSERT INTO retry_row (n) VALUES (5) RETURNING id").Row().Scan(&n); err == nil {
 			t.Error("Raw INSERT RETURNING Row は拒否されるはず")
 		}
+		if err := tx.Raw("WITH x AS (SELECT 1) UPDATE retry_row SET n = 9 WHERE id = ?", row.ID).Scan(&n).Error; !errors.Is(err, errUncoveredWriteQuery) {
+			t.Errorf("RETURNING の無い CTE の UPDATE を Raw Scan: err = %v", err)
+		}
 		if err := tx.Raw("SELECT n FROM retry_row WHERE id = ?", row.ID).Scan(&n).Error; err != nil {
 			t.Errorf("読み取りの Raw: %v", err)
 		}
@@ -340,6 +343,11 @@ func TestConcurrentTxRejectsUncoveredWriteQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int64
+	var got retryRow
+	db.First(&got, row.ID)
+	if got.N != 3 {
+		t.Fatalf("n = %d, want 3(拒否した CTE の UPDATE は流れない)", got.N)
+	}
 	db.Model(&retryRow{}).Count(&count)
 	if count != 2 {
 		t.Fatalf("rows = %d, want 2(拒否した INSERT は流れない)", count)
@@ -351,7 +359,9 @@ func TestIsWriteSQL(t *testing.T) {
 		"INSERT INTO t VALUES (1)": true, "  update t set a=1": true, "DELETE FROM t": true, "REPLACE INTO t VALUES (1)": true,
 		"-- note\nUPDATE t SET a=1": true, "/* x */ insert into t values(1)": true,
 		"WITH x AS (SELECT 1) UPDATE t SET a=1 RETURNING a": true, "WITH x AS (SELECT 1) SELECT * FROM x": false,
-		"SELECT * FROM t": false, "PRAGMA journal_mode": false,
+		"WITH x AS (SELECT 1) UPDATE retry_row SET n=9 WHERE id=1": true, "with recursive c(n) as (select 1) delete from t": true,
+		"SELECT * FROM t": false, "select updated_at from t": false, "PRAGMA journal_mode": false, "PRAGMA journal_mode = 'mvcc'": true,
+		"EXPLAIN SELECT 1": false, "VALUES (1)": false, "CREATE TABLE t (id int)": true, "": true,
 	} {
 		if got := isWriteSQL(q); got != want {
 			t.Errorf("isWriteSQL(%q) = %v, want %v", q, got, want)

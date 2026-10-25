@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"regexp"
 	"strings"
 	"time"
 
@@ -199,30 +200,47 @@ func (t *immediateTx) rejectQuery(query string) error {
 	return nil
 }
 
-// isWriteSQL は SQL が書き込み(INSERT / UPDATE / DELETE / REPLACE、または RETURNING 付きの WITH)かを返す。
+// isWriteSQL は SQL が書き込みになりうるかを返す。読み取りと分かるもの(SELECT・EXPLAIN・VALUES、値を設定しない PRAGMA、
+// INSERT / UPDATE / DELETE / REPLACE の語を含まない WITH)以外は、保守的に書き込みとみなす
+// (WITH x AS (...) UPDATE ... のように RETURNING が無くても書く SQL があるため)。
 func isWriteSQL(query string) bool {
 	q := strings.TrimSpace(query)
 	for strings.HasPrefix(q, "--") || strings.HasPrefix(q, "/*") {
 		if strings.HasPrefix(q, "--") {
-			if i := strings.IndexByte(q, '\n'); i >= 0 {
-				q = strings.TrimSpace(q[i+1:])
-				continue
+			i := strings.IndexByte(q, '\n')
+			if i < 0 {
+				return false
 			}
-			return false
-		}
-		if i := strings.Index(q, "*/"); i >= 0 {
-			q = strings.TrimSpace(q[i+2:])
+			q = strings.TrimSpace(q[i+1:])
 			continue
 		}
-		return false
+		i := strings.Index(q, "*/")
+		if i < 0 {
+			return false
+		}
+		q = strings.TrimSpace(q[i+2:])
 	}
 	upper := strings.ToUpper(q)
-	for _, kw := range []string{"INSERT", "UPDATE", "DELETE", "REPLACE"} {
-		if strings.HasPrefix(upper, kw) {
-			return true
-		}
+	switch {
+	case hasKeyword(upper, "SELECT"), hasKeyword(upper, "EXPLAIN"), hasKeyword(upper, "VALUES"):
+		return false
+	case hasKeyword(upper, "PRAGMA"):
+		return strings.Contains(upper, "=")
+	case hasKeyword(upper, "WITH"):
+		return dmlWord.MatchString(upper)
 	}
-	return strings.HasPrefix(upper, "WITH") && strings.Contains(upper, "RETURNING")
+	return true
+}
+
+var dmlWord = regexp.MustCompile(`\b(INSERT|UPDATE|DELETE|REPLACE)\b`)
+
+// hasKeyword は upper が kw の語で始まるかを返す。
+func hasKeyword(upper, kw string) bool {
+	if !strings.HasPrefix(upper, kw) {
+		return false
+	}
+	rest := upper[len(kw):]
+	return rest == "" || !(rest[0] == '_' || rest[0] >= 'A' && rest[0] <= 'Z' || rest[0] >= '0' && rest[0] <= '9')
 }
 
 // markAborted は衝突のエラーを受けたら、このトランザクションを取り消し済みにする。
