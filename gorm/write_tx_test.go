@@ -277,6 +277,21 @@ func TestWriteTxOptionsDefaultsAndBackoff(t *testing.T) {
 	}
 }
 
+func TestNegativeWriteTxOptionsAreRejected(t *testing.T) {
+	db := openWriteTxDB(t, filepath.Join(t.TempDir(), "neg.db"))
+	ran := false
+	err := WriteTransactionWithOptions(db, WriteTxOptions{MaxAttempts: -1}, func(*gorm.DB) error {
+		ran = true
+		return nil
+	})
+	if err == nil || ran {
+		t.Fatalf("負の MaxAttempts は fn を実行せずエラーにするはず: err=%v ran=%v", err, ran)
+	}
+	if err := UseWriteRetry(db, WriteRetryOptions{Retry: WriteTxOptions{BaseBackoff: -time.Millisecond}}); err == nil {
+		t.Fatal("負の待ち時間は UseWriteRetry でエラーにするはず")
+	}
+}
+
 func TestIsSQLiteBusyError(t *testing.T) {
 	for _, msg := range []string{
 		"database is locked",

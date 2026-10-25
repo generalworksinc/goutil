@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"strings"
@@ -13,8 +14,8 @@ import (
 )
 
 // WriteTxOptions は WriteTransactionWithOptions の設定。
-// MaxAttempts・BaseBackoff・MaxBackoff がゼロ値(負の値も同じ)なら、UseWriteRetry の設定
-// (呼んでいなければ DefaultWriteTxOptions)の値を使う。Immediate はそのまま使う。
+// MaxAttempts・BaseBackoff・MaxBackoff がゼロ値なら、UseWriteRetry の設定(呼んでいなければ DefaultWriteTxOptions)の
+// 値を使う。負の値はエラーになる。
 type WriteTxOptions struct {
 	// Immediate を true にすると、UseWriteRetry の Concurrent が有効な DB でも、このトランザクションは BEGIN IMMEDIATE で始める。
 	// 同じ行に書き込みが集中する処理(連番の採番など)に使う。衝突してやり直しを繰り返すより、順番に待つほうが速い。
@@ -34,19 +35,27 @@ func DefaultWriteTxOptions() WriteTxOptions {
 
 func (o WriteTxOptions) withDefaults() WriteTxOptions { return o.fillFrom(DefaultWriteTxOptions()) }
 
-// fillFrom は、ゼロ値(負の値も同じ)のやり直しの回数・待ち時間を、fallback の値で埋める。
+// fillFrom は、ゼロ値のやり直しの回数・待ち時間を、fallback の値で埋める。
 // fallback は UseWriteRetry で決めた設定か、DefaultWriteTxOptions。
 func (o WriteTxOptions) fillFrom(fallback WriteTxOptions) WriteTxOptions {
-	if o.MaxAttempts <= 0 {
+	if o.MaxAttempts == 0 {
 		o.MaxAttempts = fallback.MaxAttempts
 	}
-	if o.BaseBackoff <= 0 {
+	if o.BaseBackoff == 0 {
 		o.BaseBackoff = fallback.BaseBackoff
 	}
-	if o.MaxBackoff <= 0 {
+	if o.MaxBackoff == 0 {
 		o.MaxBackoff = fallback.MaxBackoff
 	}
 	return o
+}
+
+// validate は負の値を拒む(呼び出し側の誤り。黙って既定値にすると誤りが隠れ、MaxAttempts が負だと fn が一度も実行されない)。
+func (o WriteTxOptions) validate() error {
+	if o.MaxAttempts < 0 || o.BaseBackoff < 0 || o.MaxBackoff < 0 {
+		return fmt.Errorf("gw_gorm: やり直しの回数と待ち時間に負の値は使えない: %+v", o)
+	}
+	return nil
 }
 
 // WriteTransaction は書き込みを含むトランザクションを開始する。
@@ -78,6 +87,9 @@ func WriteTransactionWithOptions(db *gorm.DB, opts WriteTxOptions, fn func(tx *g
 	}
 	if db.Error != nil {
 		return db.Error
+	}
+	if err := opts.validate(); err != nil {
+		return err
 	}
 	if !IsSQLiteDialect(db) || isInsideTransaction(db) {
 		return db.Transaction(fn)

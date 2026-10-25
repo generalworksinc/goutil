@@ -16,7 +16,7 @@ type WriteRetryOptions struct {
 	// それ以外の DB(SQLite、libSQL など)では無視され、BEGIN IMMEDIATE のまま動く。
 	Concurrent bool
 	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。
-	// MaxAttempts・BaseBackoff・MaxBackoff がゼロ値(負の値も同じ)なら、DefaultWriteTxOptions の値を使う。
+	// MaxAttempts・BaseBackoff・MaxBackoff がゼロ値なら、DefaultWriteTxOptions の値を使う。負の値はエラーになる。
 	Retry WriteTxOptions
 }
 
@@ -38,6 +38,9 @@ const writeRetryPluginName = "gw_gorm:write_retry"
 // そのため使わない設定にする(SkipDefaultTransaction)。複数の SQL になる書き込みは WriteTransaction で包むこと。
 // SQLite 系以外の DB では何もしない。
 func UseWriteRetry(db *gorm.DB, opts WriteRetryOptions) error {
+	if err := opts.Retry.validate(); err != nil {
+		return err
+	}
 	if !IsSQLiteDialect(db) {
 		return nil
 	}
