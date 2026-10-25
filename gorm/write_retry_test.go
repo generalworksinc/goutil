@@ -46,7 +46,7 @@ func openTursoMVCC(t *testing.T, concurrent bool) *gorm.DB {
 	return db
 }
 
-// holdConcurrentUpdate は別の接続で BEGIN CONCURRENT のまま行を更新し、d の後にコミットする。
+// holdConcurrentUpdate は、別の接続で BEGIN CONCURRENT のまま行を更新し、d だけ待ってからコミットする。
 func holdConcurrentUpdate(t *testing.T, db *gorm.DB, id uint, n int, d time.Duration) <-chan error {
 	t.Helper()
 	sqlDB, _ := db.DB()
@@ -113,7 +113,7 @@ func TestUseWriteRetryConcurrentReadModifyWriteLosesNoUpdates(t *testing.T) {
 	}
 }
 
-// トランザクションの外の 1 文の書き込みも、BEGIN CONCURRENT の途中の行とぶつかればやり直される。
+// トランザクションの外の 1 文の書き込みも、BEGIN CONCURRENT の途中の行と衝突すれば、やり直される。
 func TestUseWriteRetryRetriesAutocommitWrites(t *testing.T) {
 	db := openTursoMVCC(t, true)
 	row := retryRow{N: 0}
@@ -228,7 +228,7 @@ func TestRetryableWriteErrorClassification(t *testing.T) {
 	}
 }
 
-// 内側の Transaction で衝突し、そのエラーを外側が握りつぶして書き込みを続けても、一部だけが残らない。
+// 内側の Transaction で衝突し、そのエラーを外側が捨てて書き込みを続けても、一部だけが残ることはない。
 func TestNestedConflictSwallowedByOuterDoesNotPersistPartially(t *testing.T) {
 	db := openTursoMVCC(t, true)
 	row := retryRow{N: 0}
@@ -328,7 +328,7 @@ func TestEndsTransaction(t *testing.T) {
 	}
 }
 
-// トランザクションを終わらせる「ことがある」エラーでは、後続の SQL は止め、ROLLBACK は実際に流す
+// トランザクションを終わらせる「ことがある」エラーでは、後続の SQL を止め、ROLLBACK は実際に流す
 // (トランザクションが続いていた場合に、終わっていない接続をプールへ返さないため)。
 func TestBrokenTxStillRollsBackWhenTransactionSurvives(t *testing.T) {
 	db := openWriteTxDB(t, filepath.Join(t.TempDir(), "survive.db"))

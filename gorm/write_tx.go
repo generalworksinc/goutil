@@ -13,7 +13,7 @@ import (
 )
 
 // WriteTxOptions は WriteTransactionWithOptions の設定。
-// ゼロ値のフィールドは、UseWriteRetry の設定(呼んでいなければ DefaultWriteTxOptions)で補われる。
+// 0 のままの欄は、UseWriteRetry の設定(呼んでいなければ DefaultWriteTxOptions)の値を使う。
 type WriteTxOptions struct {
 	// Immediate を true にすると、UseWriteRetry の Concurrent が有効な DB でも、このトランザクションは BEGIN IMMEDIATE で始める。
 	// 同じ行に書き込みが集中する処理(連番の採番など)に使う。衝突してやり直しを繰り返すより、順番に待つほうが速い。
@@ -60,7 +60,7 @@ func (o WriteTxOptions) fillFrom(fallback WriteTxOptions) WriteTxOptions {
 // GORM 標準どおり SAVEPOINT によるネストになる。
 //
 // fn はやり直されることがあるため、次を守ること。
-//   - DB 外への副作用(通知送信など)を持たせない
+//   - DB の外への副作用(通知の送信など)を持たせない
 //   - 書き込む値(モデルなど)は fn の中で作る。DB がトランザクションを取り消しても Go の値は戻らない
 //     (fn の外で作ったモデルには、取り消された INSERT の ID などが残り、やり直しで別の SQL になる)
 //   - fn の外の変数(集計や戻り値)には、WriteTransaction が成功した後に結果を入れる
@@ -132,7 +132,7 @@ func statementContext(db *gorm.DB) context.Context {
 	return context.Background()
 }
 
-// retryWrite は fn がやり直せるエラー(isRetryableWriteError)で失敗した場合に限り、バックオフ付きでやり直す。
+// retryWrite は、fn がやり直せるエラー(isRetryableWriteError)で失敗した場合に限り、待ち時間を少しずつ延ばしながらやり直す。
 func retryWrite(ctx context.Context, opts WriteTxOptions, fn func() error) error {
 	var err error
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
@@ -179,17 +179,17 @@ func (o WriteTxOptions) backoff(attempt int) time.Duration {
 // ErrInvalidTransaction → スキップされる。
 type immediateTx struct {
 	conn *sql.Conn
-	// broken は、DB がトランザクションを終わらせた(または終わったか分からない)エラー(endsTransaction)。
+	// broken は、DB がトランザクションを終わらせた、または終わらせたかもしれないエラー(endsTransaction で判定する)。
 	//
 	// 保険: DB が終わらせた後の SQL は、トランザクションの外で 1 文ずつその場で確定してしまう。fn がエラーを返さずに
 	// 続けた場合(内側の Transaction のエラーを捨てた、など)に一部だけが残らないよう、以後の SQL と COMMIT を止める。
 	// ROLLBACK は必ず流す(トランザクションが続いている場合もあるため)。
-	// shortcut: Raw(...).Scan / Rows / Row のエラーは行を読む途中で返り、ここからは見えない。そのエラーを捨てて続けた
-	// 場合は守れない(fn はエラーを返すこと)。
+	// shortcut: Raw(...).Scan / Rows / Row のエラーは行を読む途中で返り、この接続の層からは見えない。そのエラーを捨てて
+	// 続けた場合は守れない(fn はエラーを返すこと)。
 	broken error
 }
 
-// noteError は、トランザクションを終わらせるエラーを受けたら記録する。
+// noteError は、トランザクションを終わらせる(ことがある)エラーを受けたら記録する。
 func (t *immediateTx) noteError(err error) {
 	if t.broken == nil && endsTransaction(err) {
 		t.broken = err
@@ -244,7 +244,7 @@ func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...an
 
 func (t *immediateTx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	if t.broken != nil {
-		// *sql.Row にエラーを持たせる手段が無いので、取り消し済みの context で呼んで SQL を実行させない。
+		// *sql.Row にエラーを持たせる手段が無いので、キャンセル済みの context で呼んで SQL を実行させない。
 		canceled, cancel := context.WithCancel(ctx)
 		cancel()
 		return t.conn.QueryRowContext(canceled, query, args...)
@@ -269,7 +269,7 @@ func (t *immediateTx) Rollback() error {
 	return err
 }
 
-// runWriteTx は begin(BEGIN IMMEDIATE か BEGIN CONCURRENT)で1回分のトランザクションを実行する。
+// runWriteTx は、begin(BEGIN IMMEDIATE か BEGIN CONCURRENT)で 1 回分のトランザクションを実行する。
 // 失敗時は必ず ROLLBACK し、ROLLBACK 自体に失敗した接続はプールへ戻さず破棄する
 // (トランザクションを握ったままの接続がプールに戻ると、以後の書き込みが全てロックされるため)。
 func runWriteTx(db *gorm.DB, begin string, fn func(tx *gorm.DB) error) (err error) {

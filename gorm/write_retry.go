@@ -15,7 +15,7 @@ type WriteRetryOptions struct {
 	// WriteTransaction を BEGIN CONCURRENT で始め、別々の行への書き込みを並行させる。
 	// それ以外の DB(SQLite、libSQL など)では無視され、BEGIN IMMEDIATE のまま動く。
 	Concurrent bool
-	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。ゼロ値は DefaultWriteTxOptions。
+	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。0 のままの欄は DefaultWriteTxOptions の値を使う。
 	Retry WriteTxOptions
 }
 
@@ -24,17 +24,17 @@ const writeRetryPluginName = "gw_gorm:write_retry"
 // UseWriteRetry は DB を開いた直後に一度だけ呼ぶ。以後、利用側は書き込みの衝突を意識しなくてよい。
 //
 //   - WriteTransaction: BEGIN CONCURRENT(Concurrent が有効なとき)か BEGIN IMMEDIATE で始め、衝突・ロック待ち・
-//     タイムアウトで失敗したらトランザクション全体をやり直す。DDL は BEGIN CONCURRENT の中で使えないため、
+//     打ち切りで失敗したら、トランザクション全体をやり直す。DDL は BEGIN CONCURRENT の中で使えないので、
 //     その失敗は BEGIN IMMEDIATE に切り替えてやり直す
 //   - トランザクションの外の 1 文の書き込み(Create / Update / Delete / Exec): 同じ理由で失敗したら、その操作を流し直す
 //
-// やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは DB に何も残さない(トランザクションは全体が取り消され、
-// 1 文の書き込みは反映されない)。ぶつかった相手の更新は DB が検知して止めるので、上書きもしない。
-// 守ること: WriteTransaction の fn に DB の外への副作用(通知の送信など)を持たせず、書き込む値は fn の中で作る
+// やり直して安全な理由: 衝突・ロック待ちで失敗した書き込みは、DB に何も残さない(トランザクションは全体が取り消され、
+// 1 文の書き込みは反映されない)。衝突した相手の更新を上書きすることもない(DB が衝突を検知して止める)。
+// 守ること: WriteTransaction の fn に DB の外への副作用(通知の送信など)を持たせない。書き込む値は fn の中で作る
 // (WriteTransaction のコメントを参照)。
 //
-// GORM の既定のトランザクション(Create などを 1 回ずつ BEGIN〜COMMIT で包む)は、素の BEGIN で始まりやり直せないため
-// 切る(SkipDefaultTransaction)。複数の SQL になる書き込みは WriteTransaction で包むこと。
+// GORM の既定のトランザクション(Create などを 1 回ずつ BEGIN〜COMMIT で包む)は、素の BEGIN で始まり、やり直しもできない。
+// そのため使わない設定にする(SkipDefaultTransaction)。複数の SQL になる書き込みは WriteTransaction で包むこと。
 // SQLite 系以外の DB では何もしない。
 func UseWriteRetry(db *gorm.DB, opts WriteRetryOptions) error {
 	if !IsSQLiteDialect(db) {
@@ -84,17 +84,18 @@ func (p *writeRetryPlugin) Initialize(db *gorm.DB) error {
 	return nil
 }
 
-// retrying はトランザクションの外の 1 文の書き込みを、やり直せるエラーのときに流し直す。
-// RETURNING 付きの書き込みは、衝突のエラーが行を読む途中で返るため、接続の層ではなくこの単位で流し直す。
-// トランザクションの中ではやり直さない(Turso は衝突でトランザクション全体を取り消すため、外側の WriteTransaction がやり直す)。
+// retrying は、トランザクションの外の 1 文の書き込みが、やり直せるエラーで失敗したときに流し直す。
+// RETURNING 付きの書き込みは、衝突のエラーが行を読む途中で返る。そのため接続の層ではなく、GORM の操作の単位で流し直す。
+// トランザクションの中ではやり直さない(Turso は衝突でトランザクション全体を終わらせるので、外側の WriteTransaction がやり直す)。
 //
-// 結果の行を 1 行でも読んだ後に失敗した場合(RowsAffected > 0)はやり直さない。GORM は読んだ行を Dest に書き込んでおり
-// (ID を埋めた要素は次の回で飛ばす、など)、そのまま流し直すと結果の対応が崩れるため。Turso の衝突は最初の行の前に返る。
+// 結果の行を 1 行でも読んだ後に失敗した場合(RowsAffected > 0)は、やり直さない。GORM は読んだ行を Dest に書き込んでおり
+// (ID を埋めた要素は次の回で飛ばす、など)、そのまま流し直すと結果の対応が崩れるため。
+// Turso の衝突は最初の行を読む前に返るので、通常はやり直せる。
 func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 	return func(db *gorm.DB) {
 		if isInsideTransaction(db) {
 			next(db)
-			// RETURNING 付きの書き込みのエラーは行を読む途中で返るので、接続の層では見えない。ここで記録する。
+			// RETURNING 付きの書き込みのエラーは行を読む途中で返り、接続の層からは見えない。そのためここで記録する。
 			if itx, ok := db.Statement.ConnPool.(*immediateTx); ok {
 				itx.noteError(db.Error)
 			}
@@ -123,9 +124,9 @@ func writeRetryPluginOf(db *gorm.DB) *writeRetryPlugin {
 	return p
 }
 
-// isRetryableWriteError は、やり直せば通りうる書き込みのエラーかを返す。
-// ロック待ち(database is locked / busy)、Turso の MVCC の衝突(Write-write conflict)、
-// libSQL のサーバーが他の書き込みを待たせすぎたトランザクションを打ち切ったとき(Transaction timed out)。
+// isRetryableWriteError は、やり直せば通りうる書き込みのエラーかを返す。対象は、ロック待ち(database is locked / busy)、
+// Turso の MVCC の衝突(Write-write conflict)、libSQL のサーバーによる打ち切り(Transaction timed out。
+// 他の書き込みを長く待たせたトランザクションが打ち切られる)。
 func isRetryableWriteError(err error) bool {
 	return IsSQLiteBusyError(err) || isWriteConflict(err) || containsFold(err, "transaction timed out")
 }
