@@ -101,7 +101,7 @@ func (p *writeRetryPlugin) retrying(next func(*gorm.DB)) func(*gorm.DB) {
 			next(db)
 			// RETURNING 付きの書き込みのエラーは行を読む途中で返り、接続の層からは見えない。そのためここで記録する。
 			if itx, ok := db.Statement.ConnPool.(*immediateTx); ok {
-				itx.noteError(db.Error)
+				itx.markBrokenIfEnded(db.Error)
 			}
 			return
 		}

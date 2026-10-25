@@ -197,8 +197,8 @@ type immediateTx struct {
 	broken error
 }
 
-// noteError は、トランザクションを終わらせる(ことがある)エラーを受けたら記録する。
-func (t *immediateTx) noteError(err error) {
+// markBrokenIfEnded は、err がトランザクションを終わらせる(ことがある)エラー(endsTransaction)なら、broken に記録する。
+func (t *immediateTx) markBrokenIfEnded(err error) {
 	if t.broken == nil && endsTransaction(err) {
 		t.broken = err
 	}
@@ -237,7 +237,7 @@ func (t *immediateTx) ExecContext(ctx context.Context, query string, args ...any
 		return nil, t.broken
 	}
 	res, err := t.conn.ExecContext(ctx, query, args...)
-	t.noteError(err)
+	t.markBrokenIfEnded(err)
 	return res, err
 }
 
@@ -246,7 +246,7 @@ func (t *immediateTx) QueryContext(ctx context.Context, query string, args ...an
 		return nil, t.broken
 	}
 	rows, err := t.conn.QueryContext(ctx, query, args...)
-	t.noteError(err)
+	t.markBrokenIfEnded(err)
 	return rows, err
 }
 
@@ -265,7 +265,7 @@ func (t *immediateTx) Commit() error {
 		return t.broken
 	}
 	_, err := t.conn.ExecContext(context.Background(), "COMMIT")
-	t.noteError(err) // 衝突は COMMIT の時点で返ることもある
+	t.markBrokenIfEnded(err) // 衝突は COMMIT の時点で返ることもある
 	return err
 }
 

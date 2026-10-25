@@ -336,7 +336,7 @@ func TestBrokenTxStillRollsBackWhenTransactionSurvives(t *testing.T) {
 			return err
 		}
 		itx := tx.Statement.ConnPool.(*immediateTx)
-		itx.noteError(errors.New("database or disk is full")) // SQLite はこの文だけ取り消してトランザクションを続けることがある
+		itx.markBrokenIfEnded(errors.New("database or disk is full")) // SQLite はこの文だけ取り消してトランザクションを続けることがある
 		if err := tx.Create(&writeTxRow{V: "after"}).Error; err == nil {
 			t.Error("壊れたトランザクションの後続の SQL は止めるはず")
 		}
