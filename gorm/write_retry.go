@@ -16,7 +16,7 @@ type WriteRetryOptions struct {
 	// それ以外の DB(SQLite、libSQL など)では無視され、BEGIN IMMEDIATE のまま動く。
 	Concurrent bool
 	// Retry はやり直しの回数と待ち時間。WriteTransaction と 1 文の書き込みの両方に効く。
-	// MaxAttempts・BaseBackoff・MaxBackoff が 0 以下(未指定のゼロ値を含む)なら、DefaultWriteTxOptions の値を使う。
+	// MaxAttempts・BaseBackoff・MaxBackoff がゼロ値(負の値も同じ)なら、DefaultWriteTxOptions の値を使う。
 	Retry WriteTxOptions
 }
 
