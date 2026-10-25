@@ -70,8 +70,18 @@ func WriteTransactionWithOptions(db *gorm.DB, opts WriteTxOptions, fn func(tx *g
 		return db.Transaction(fn)
 	}
 	opts = opts.withDefaults()
-	return retryOnSQLiteBusy(statementContext(db), opts, func() error {
-		return runImmediateTx(db, fn)
+	begin := "BEGIN IMMEDIATE"
+	if writeRetryConfig(db) {
+		begin = "BEGIN CONCURRENT"
+	}
+	return retryWrite(statementContext(db), opts, func() error {
+		err := runWriteTx(db, begin, fn)
+		if begin == "BEGIN CONCURRENT" && needsExclusiveTx(err) {
+			// DDL は BEGIN CONCURRENT の中で使えない。このトランザクションは BEGIN IMMEDIATE でやり直す。
+			begin = "BEGIN IMMEDIATE"
+			return runWriteTx(db, begin, fn)
+		}
+		return err
 	})
 }
 
@@ -82,7 +92,7 @@ func IsSQLiteDialect(db *gorm.DB) bool {
 
 // IsSQLiteBusyError は SQLite の SQLITE_BUSY 系エラーかどうかを判定する。
 // mattn/go-sqlite3 と glebarez/sqlite は "database is locked"、Turso(libsql) は
-// "SQLite error: database is locked" の文字列で返る。
+// "SQLite error: database is locked"、Turso Database は "database is busy" の文字列で返る。
 func IsSQLiteBusyError(err error) bool {
 	if err == nil {
 		return false
@@ -90,6 +100,7 @@ func IsSQLiteBusyError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "database is locked") ||
 		strings.Contains(msg, "database table is locked") ||
+		strings.Contains(msg, "database is busy") ||
 		strings.Contains(msg, "sqlite_busy")
 }
 
@@ -105,29 +116,25 @@ func statementContext(db *gorm.DB) context.Context {
 	return context.Background()
 }
 
-// retryOnSQLiteBusy は fn が BUSY エラーで失敗した場合に限り、バックオフ付きでやり直す。
-func retryOnSQLiteBusy(ctx context.Context, opts WriteTxOptions, fn func() error) error {
+// retryWrite は fn がやり直せるエラー(IsRetryableWriteError)で失敗した場合に限り、バックオフ付きでやり直す。
+func retryWrite(ctx context.Context, opts WriteTxOptions, fn func() error) error {
 	var err error
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		err = fn()
-		if err == nil || !IsSQLiteBusyError(err) {
+		if err == nil || !IsRetryableWriteError(err) {
 			return err
 		}
 		if attempt == opts.MaxAttempts {
 			break
 		}
 		wait := opts.backoff(attempt)
-		slog.WarnContext(ctx, "write transaction hit SQLITE_BUSY; retrying",
+		slog.WarnContext(ctx, "write transaction hit a retryable error; retrying",
 			slog.Int("attempt", attempt), slog.Duration("wait", wait), slog.String("error", err.Error()))
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
+		if !sleepCtx(ctx, wait) {
 			return err
-		case <-timer.C:
 		}
 	}
-	slog.ErrorContext(ctx, "write transaction gave up after SQLITE_BUSY retries",
+	slog.ErrorContext(ctx, "write transaction gave up after retries",
 		slog.Int("attempts", opts.MaxAttempts), slog.String("error", err.Error()))
 	return err
 }
@@ -189,10 +196,10 @@ func (t *immediateTx) Rollback() error {
 	return err
 }
 
-// runImmediateTx は BEGIN IMMEDIATE で1回分のトランザクションを実行する。
+// runWriteTx は begin(BEGIN IMMEDIATE か BEGIN CONCURRENT)で1回分のトランザクションを実行する。
 // 失敗時は必ず ROLLBACK し、ROLLBACK 自体に失敗した接続はプールへ戻さず破棄する
 // (トランザクションを握ったままの接続がプールに戻ると、以後の書き込みが全てロックされるため)。
-func runImmediateTx(db *gorm.DB, fn func(tx *gorm.DB) error) (err error) {
+func runWriteTx(db *gorm.DB, begin string, fn func(tx *gorm.DB) error) (err error) {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return err
@@ -208,7 +215,7 @@ func runImmediateTx(db *gorm.DB, fn func(tx *gorm.DB) error) (err error) {
 	tx := db.Session(&gorm.Session{Context: ctx, NewDB: true})
 	tx.Statement.ConnPool = itx
 
-	if err = tx.Exec("BEGIN IMMEDIATE").Error; err != nil {
+	if err = tx.Exec(begin).Error; err != nil {
 		return err
 	}
 
@@ -218,7 +225,8 @@ func runImmediateTx(db *gorm.DB, fn func(tx *gorm.DB) error) (err error) {
 			return
 		}
 		// fn 内の panic、fn のエラー、COMMIT 失敗のいずれでもここに来る。
-		if rollbackErr := itx.Rollback(); rollbackErr != nil {
+		// Turso の MVCC は衝突したトランザクションを自ら取り消すので、ROLLBACK の失敗は接続の異常ではない。
+		if rollbackErr := itx.Rollback(); rollbackErr != nil && !isWriteConflict(err) {
 			slog.ErrorContext(ctx, "rollback failed; discarding connection", slog.String("error", rollbackErr.Error()))
 			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 		}
