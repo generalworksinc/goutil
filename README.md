@@ -1,6 +1,6 @@
 # common codes for golang (Generalworks inc)
 
-Go 1.27 以降が必要です。
+Go 1.27.3 以降が必要です。
 
 ## 型付きリクエストローカル値
 
