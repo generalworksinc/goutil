@@ -1,6 +1,6 @@
 module github.com/generalworksinc/goutil
 
-go 1.27.3
+go 1.27.4
 
 require (
 	aidanwoods.dev/go-paseto v1.6.0
@@ -8,8 +8,8 @@ require (
 	github.com/dsnet/compress v0.0.1
 	github.com/fasthttp/websocket v1.5.12
 	github.com/getsentry/sentry-go v0.50.0
-	github.com/gofiber/contrib/v3/websocket v1.2.13
-	github.com/gofiber/fiber/v3 v3.6.1
+	github.com/gofiber/contrib/v3/websocket v1.2.14
+	github.com/gofiber/fiber/v3 v3.7.0
 	github.com/google/uuid v1.6.0
 	github.com/ktnyt/go-moji v1.0.0
 	github.com/kurehajime/cjk2num v0.0.0-20210929142953-005d508333d0
@@ -19,9 +19,9 @@ require (
 	github.com/testcontainers/testcontainers-go v0.45.0
 	github.com/yeka/zip v0.0.0-20231116150916-03d6312748a9
 	go.mongodb.org/mongo-driver v1.17.10
-	golang.org/x/crypto v0.58.0
-	golang.org/x/exp v0.0.0-20261106192419-47ce03d25ef0
-	golang.org/x/text v0.43.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/exp v0.0.0-20261113113407-e3970619a1a4
+	golang.org/x/text v0.44.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 	turso.tech/database/tursogo v0.8.3
@@ -49,12 +49,12 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/gofiber/schema v1.9.3 // indirect
-	github.com/gofiber/utils/v2 v2.6.4 // indirect
+	github.com/gofiber/schema v1.9.4 // indirect
+	github.com/gofiber/utils/v2 v2.6.5 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/klauspost/compress v1.20.4 // indirect
 	github.com/lufia/plan9stats v0.0.0-20261101121723-be84dd9509a0 // indirect
 	github.com/magiconair/properties v1.18.12 // indirect
 	github.com/mattn/go-colorable v0.1.16 // indirect
@@ -83,7 +83,7 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/tursodatabase/turso-go-platform-libs v0.8.3 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.77.0 // indirect
+	github.com/valyala/fasthttp v1.79.0 // indirect
 	github.com/xdg-go/scram v1.4.0 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
@@ -96,8 +96,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 )
 
 replace github.com/generalworksinc/goutil => ./

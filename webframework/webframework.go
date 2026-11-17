@@ -656,16 +656,18 @@ func (conn *WebSocketConn) Close() error {
 	if conn == nil || conn.Conn == nil {
 		return nil
 	}
+	// 先に contrib の Close を通す。contrib(v1.2.13〜)は返事をためてまとめて送り、Close でためた分を
+	// 送り切ってから接続を閉じる。下の通信路を先に閉じると、ためた返事が捨てられる。
+	err := conn.Conn.Close()
 	// fasthttpはKeepHijackedConns=falseの場合、hijack wrapperのCloseをno-opにし、
-	// handler終了後に実接続を閉じます。Read待機中のhandlerをshutdownで解除するため、
-	// UnsafeConnが提供されている場合は実際のnet.Connを直接closeします。
-	networkConn := conn.Conn.NetConn()
-	if unsafeConn, ok := networkConn.(interface{ UnsafeConn() net.Conn }); ok {
+	// handler終了後に実接続を閉じます。Read待機中のhandlerをshutdownで確実に解除するため、
+	// 送り切ったあとに、UnsafeConnが提供されていれば実際のnet.Connも閉じます(二度目のCloseの誤りは無視)。
+	if unsafeConn, ok := conn.Conn.NetConn().(interface{ UnsafeConn() net.Conn }); ok {
 		if actualConn := unsafeConn.UnsafeConn(); actualConn != nil {
-			return actualConn.Close()
+			_ = actualConn.Close()
 		}
 	}
-	return conn.Conn.Close()
+	return err
 }
 func (conn *WebSocketConn) NextReader() (messageType int, r io.Reader, err error) {
 	return conn.Conn.NextReader()
