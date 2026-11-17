@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"mime/multipart"
@@ -607,6 +608,10 @@ func (ctx WebCtx) Done() <-chan struct{} {
 // WebSocket //////////////////////////////////////////////////
 type WebSocketConn struct {
 	Conn *websocket.Conn
+	// Close は接続ごとに 1 回だけ走らせ、後から呼んだ人は先の Close(送り切りを含む)が終わるのを待つ。
+	// handler の Close と shutdown の closeAll が重なっても、後の Close が先の送り切りを打ち切らないため
+	closeOnce sync.Once
+	closeErr  error
 }
 
 type WsMessageType int
@@ -656,6 +661,11 @@ func (conn *WebSocketConn) Close() error {
 	if conn == nil || conn.Conn == nil {
 		return nil
 	}
+	conn.closeOnce.Do(func() { conn.closeErr = conn.closeOnceUnsynchronized() })
+	return conn.closeErr
+}
+
+func (conn *WebSocketConn) closeOnceUnsynchronized() error {
 	// 先に contrib の Close を通す。contrib(v1.2.13〜)は返事をためてまとめて送り、Close でためた分を
 	// 送り切ってから接続を閉じる。下の通信路を先に閉じると、ためた返事が捨てられる。
 	err := conn.Conn.Close()
