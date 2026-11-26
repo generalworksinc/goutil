@@ -42,6 +42,8 @@ gw_web.NewAppWithSettings(errorHandler, &gw_web.AppSettings{JSONOptions: []json.
 
 効くのは、Fiber の `JSONEncoder`・`JSONDecoder` を使う経路です(`BindJSON`・JSON の content type の `BodyParser`・`JSON`・JSONP・SSE のイベント・SharedState の `SetJSON`/`GetJSON`)。SharedStorage に保存済みのデータがあるなら、読み戻せるかを確かめてから切り替えます。利用側が `encoding/json` を直接呼ぶところ、生の `Send`、共通のエラーの応答(平文)は変わりません。
 
+プロダクトを v1 から v2 へ替える進め方(差を出す試験、切り替えの関門、落とし穴)は [doc/json-v2-migration.md](doc/json-v2-migration.md) にあります。
+
 ## Mongo クエリの派生
 
 共有する `Database[T]` から条件を付ける場合は `WithID`、`WithObjectID`、`WithSession` を使用します。これらは元の値を書き換えません。従来の `Id`、`Oid`、`Session` は既存コードとの互換性のため、引き続き受信側を書き換えます。
