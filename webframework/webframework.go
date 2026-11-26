@@ -2,6 +2,7 @@ package gw_web
 
 import (
 	"context"
+	"encoding/json/v2"
 	"io"
 	"log"
 	"net"
@@ -131,6 +132,14 @@ type AppSettings struct {
 	// 全リクエストを圧縮したい場合は常に false を返す関数を渡す。
 	// シグネチャは WebCtx ベース(利用側にfiber依存を持ち込まないため)。
 	CompressSkip func(c *WebCtx) bool
+	// JSONOptions を指定すると、Fiber の JSON の読み書き(JSONEncoder/JSONDecoder)を encoding/json/v2 に切り替える。
+	// 対象は BindJSON・content type が JSON の BodyParser・ctx.JSON など。空なら Fiber 既定の encoding/json(v1)のまま。
+	// 渡したオプションは goutil 側で何も足さず、Marshal と Unmarshal の両方にそのまま渡す。
+	// オプションは後ろに置いたものが優先される。
+	// すべて v2 に揃えるなら json.DefaultOptionsV2() を渡す。v1 から一部だけ挙動を変えるなら、encoding/json の
+	// DefaultOptionsV1() の後ろに、上書きするオプション(例: json.FormatNilSliceAsNull(false))を並べる。
+	// DefaultOptionsV2() は map のキー順を保証しないので、固定したいときは後ろに json.Deterministic(true) を足す。
+	JSONOptions []json.Options
 }
 
 // SkipCompressForStreaming は WebSocket アップグレードと SSE(Accept: text/event-stream)を
@@ -175,6 +184,9 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettin
 		ErrorHandler: func(ctx fiber.Ctx, err error) error {
 			return errorHandler(&WebCtx{Ctx: ctx}, err)
 		},
+	}
+	if settings != nil && len(settings.JSONOptions) > 0 {
+		fiberCfg.JSONEncoder, fiberCfg.JSONDecoder = newJSONCodec(settings.JSONOptions)
 	}
 
 	app := fiber.New(fiberCfg)
