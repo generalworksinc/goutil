@@ -31,14 +31,14 @@ import (
 	"encoding/json/v2"
 )
 
-// v2 の挙動にそろえる
-gw_web.NewAppWithSettings(errorHandler, &gw_web.AppSettings{JSONOptions: []json.Options{json.DefaultOptionsV2()}})
+// v2 の挙動にそろえ、map をキーの順に並べる
+gw_web.NewAppWithSettings(errorHandler, &gw_web.AppSettings{JSONOptions: []json.Options{json.DefaultOptionsV2(), json.Deterministic(true)}})
 
 // v1 の挙動から 1 つずつ外す(この例は nil の slice を [] で書き出す)
 gw_web.NewAppWithSettings(errorHandler, &gw_web.AppSettings{JSONOptions: []json.Options{jsonv1.DefaultOptionsV1(), json.FormatNilSliceAsNull(false)}})
 ```
 
-書き出しは、渡したオプションによらず常に `json.Deterministic(true)` で、map をキーの順に並べます。同じ値は毎回同じ文字列になります。
+オプションは加工せずにそのまま渡します。v2 の既定では map の順番が書き出すたびに変わります。順番を固定するなら `json.Deterministic(true)` を足します。`DefaultOptionsV2()` は `Deterministic(false)` を含み、後ろに置いたオプションが勝つので、`Deterministic(true)` は `DefaultOptionsV2()` より後ろに置きます。`DefaultOptionsV1()` は `Deterministic(true)` を含みます。
 
 範囲は Fiber の入口と出口だけです。利用側が `encoding/json` を直接呼ぶところは変わりません。
 

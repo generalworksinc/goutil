@@ -66,7 +66,7 @@ func TestJSONOptionsUnsetKeepsV1Behavior(t *testing.T) {
 }
 
 func TestJSONOptionsV2(t *testing.T) {
-	app := newJSONProbeApp(t, json.DefaultOptionsV2())
+	app := newJSONProbeApp(t, json.DefaultOptionsV2(), json.Deterministic(true))
 	for range 5 {
 		_, out := doJSONProbe(t, app, http.MethodGet, "/out", "")
 		if want := `{"name":"a","tags":[],` + sortedProbeMap + `}`; out != want {

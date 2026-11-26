@@ -136,7 +136,8 @@ type AppSettings struct {
 	// 空なら Fiber の既定(encoding/json、v1 の挙動)のまま。
 	// v2 の挙動にそろえるなら json.DefaultOptionsV2()、v1 から 1 つずつ外すなら
 	// encoding/json の DefaultOptionsV1() の後ろに外すオプションを足す。
-	// 書き出しは常に Deterministic(true)(map をキーの順に並べる)。
+	// オプションはそのまま渡す。v2 の既定では map の順番が毎回変わるので、
+	// 順番を固定するなら json.Deterministic(true) を DefaultOptionsV2() より後ろに置く。
 	JSONOptions []json.Options
 }
 
