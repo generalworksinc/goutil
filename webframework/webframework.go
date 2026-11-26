@@ -132,12 +132,13 @@ type AppSettings struct {
 	// 全リクエストを圧縮したい場合は常に false を返す関数を渡す。
 	// シグネチャは WebCtx ベース(利用側にfiber依存を持ち込まないため)。
 	CompressSkip func(c *WebCtx) bool
-	// JSONOptions を渡すと、BindJSON と JSON(レスポンス)を json v2 でこのオプション付きで行う。
-	// 空なら Fiber の既定(encoding/json、v1 の挙動)のまま。
-	// v2 の挙動にそろえるなら json.DefaultOptionsV2()、v1 から 1 つずつ外すなら
-	// encoding/json の DefaultOptionsV1() の後ろに外すオプションを足す。
-	// オプションはそのまま渡す。v2 の既定では map の順番が毎回変わるので、
-	// 順番を固定するなら json.Deterministic(true) を DefaultOptionsV2() より後ろに置く。
+	// JSONOptions を指定すると、Fiber の JSON の読み書き(JSONEncoder/JSONDecoder)を encoding/json/v2 に切り替える。
+	// 対象は BindJSON・content type が JSON の BodyParser・ctx.JSON など。空なら Fiber 既定の encoding/json(v1)のまま。
+	// 渡したオプションは goutil 側で何も足さず、Marshal と Unmarshal の両方にそのまま渡す。
+	// オプションは後ろに置いたものが優先される。
+	// すべて v2 に揃えるなら json.DefaultOptionsV2() を渡す。v1 から一部だけ挙動を変えるなら、encoding/json の
+	// DefaultOptionsV1() の後ろに、上書きするオプション(例: json.FormatNilSliceAsNull(false))を並べる。
+	// DefaultOptionsV2() は map のキー順を保証しないので、固定したいときは後ろに json.Deterministic(true) を足す。
 	JSONOptions []json.Options
 }
 
