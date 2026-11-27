@@ -1,8 +1,6 @@
 package gw_web
 
 import (
-	jsonv1 "encoding/json"
-	"encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,11 +16,11 @@ type jsonProbe struct {
 	M    map[string]int `json:"m"`
 }
 
-func newJSONProbeApp(t *testing.T, opts ...json.Options) *WebApp {
+func newJSONProbeApp(t *testing.T, mode JSONMode) *WebApp {
 	t.Helper()
 	app := NewAppWithSettings(func(ctx *WebCtx, err error) error {
 		return ctx.Status(http.StatusBadRequest).SendString(err.Error())
-	}, &AppSettings{JSONOptions: opts})
+	}, &AppSettings{JSON: mode})
 	app.Get("/out", func(ctx *WebCtx) error {
 		return ctx.JSON(jsonProbe{Name: "a", M: map[string]int{"q": 1, "w": 2, "e": 3, "r": 4, "t": 5, "y": 6, "u": 7, "i": 8, "o": 9, "p": 10}})
 	})
@@ -53,8 +51,8 @@ func doJSONProbe(t *testing.T, app *WebApp, method, path, body string) (int, str
 
 const sortedProbeMap = `"m":{"e":3,"i":8,"o":9,"p":10,"q":1,"r":4,"t":5,"u":7,"w":2,"y":6}`
 
-func TestJSONOptionsUnsetKeepsV1Behavior(t *testing.T) {
-	app := newJSONProbeApp(t)
+func TestJSONModeUnsetKeepsV1Behavior(t *testing.T) {
+	app := newJSONProbeApp(t, JSONV1)
 	_, out := doJSONProbe(t, app, http.MethodGet, "/out", "")
 	if want := `{"name":"a","tags":null,` + sortedProbeMap + `}`; out != want {
 		t.Fatalf("response: want %s got %s", want, out)
@@ -65,13 +63,11 @@ func TestJSONOptionsUnsetKeepsV1Behavior(t *testing.T) {
 	}
 }
 
-func TestJSONOptionsV2(t *testing.T) {
-	app := newJSONProbeApp(t, json.DefaultOptionsV2(), json.Deterministic(true))
-	for range 5 {
-		_, out := doJSONProbe(t, app, http.MethodGet, "/out", "")
-		if want := `{"name":"a","tags":[],` + sortedProbeMap + `}`; out != want {
-			t.Fatalf("response: want %s got %s", want, out)
-		}
+func TestJSONModeV2BindJSON(t *testing.T) {
+	app := newJSONProbeApp(t, JSONV2)
+	_, out := doJSONProbe(t, app, http.MethodGet, "/out", "")
+	if !strings.HasPrefix(out, `{"name":"a","tags":[],"m":{`) {
+		t.Fatalf("response: got %s", out)
 	}
 	_, in := doJSONProbe(t, app, http.MethodPost, "/in", `{"NAME":"z"}`)
 	if in != "name=" {
@@ -80,17 +76,5 @@ func TestJSONOptionsV2(t *testing.T) {
 	status, _ := doJSONProbe(t, app, http.MethodPost, "/in", `{"name":"a","name":"b"}`)
 	if status != http.StatusBadRequest {
 		t.Fatalf("duplicate member names must be rejected, got status %d", status)
-	}
-}
-
-func TestJSONOptionsV1WithOneOptionRemoved(t *testing.T) {
-	app := newJSONProbeApp(t, jsonv1.DefaultOptionsV1(), json.FormatNilSliceAsNull(false))
-	_, out := doJSONProbe(t, app, http.MethodGet, "/out", "")
-	if want := `{"name":"a","tags":[],` + sortedProbeMap + `}`; out != want {
-		t.Fatalf("response: want %s got %s", want, out)
-	}
-	_, in := doJSONProbe(t, app, http.MethodPost, "/in", `{"NAME":"z"}`)
-	if in != "name=z" {
-		t.Fatalf("remaining v1 options keep case-insensitive matching, got %q", in)
 	}
 }

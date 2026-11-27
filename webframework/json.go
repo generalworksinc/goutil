@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 
 	"github.com/generalworksinc/goutil/webframework/internal/jsonmode"
 	"github.com/gofiber/fiber/v3"
@@ -26,46 +25,29 @@ const (
 
 const jsonStateKey = "github.com/generalworksinc/goutil/webframework.json"
 
-// jsonState は app を作る時に決まった JSON の設定。nil は v1。
-type jsonState struct{ opts []json.Options }
-
-// resolveJSONOptions は、app が使う JSON の設定を決める。nil は v1。
-// 試験の中で jsontest.Build が上書きしていれば、AppSettings の JSON・JSONOptions に関わらずそのモードにする。
-func resolveJSONOptions(settings *AppSettings) []json.Options {
-	if mode, ok := jsonmode.Override(); ok {
-		return optionsForMode(JSONMode(mode), nil)
+// resolveJSONMode は、app が使うモードを決める。
+// 試験の中で jsontest.Build が上書きしていれば、AppSettings.JSON に関わらずそのモードにする。
+func resolveJSONMode(settings *AppSettings) JSONMode {
+	mode := JSONV1
+	if settings != nil {
+		mode = settings.JSON
 	}
-	if settings == nil {
-		return nil
+	if m, ok := jsonmode.Override(); ok {
+		mode = JSONMode(m)
 	}
-	return optionsForMode(settings.JSON, settings.JSONOptions)
-}
-
-func optionsForMode(mode JSONMode, custom []json.Options) []json.Options {
-	switch mode {
-	case JSONV1:
-		if len(custom) == 0 {
-			return nil
-		}
-		return slices.Clone(custom)
-	case JSONV2:
-		if len(custom) > 0 {
-			panic("gw_web: AppSettings の JSON: JSONV2 と JSONOptions は同時に指定できない(細かく決めるなら JSONOptions だけを使う)")
-		}
-		return []json.Options{json.DefaultOptionsV2()}
-	default:
+	if mode != JSONV1 && mode != JSONV2 {
 		panic(fmt.Sprintf("gw_web: 未知の JSONMode %d", mode))
 	}
+	return mode
 }
 
-// newJSONCodec は、Fiber の JSON の読み書きを、渡されたオプションのまま json v2 で行う関数の組を作る。
-func newJSONCodec(opts []json.Options) (func(any) ([]byte, error), func([]byte, any) error) {
-	joined := json.JoinOptions(opts...)
+// newJSONV2Codec は、Fiber の JSON の読み書きを json v2 の既定で行う関数の組を作る。
+func newJSONV2Codec() (func(any) ([]byte, error), func([]byte, any) error) {
 	marshal := func(v any) ([]byte, error) {
-		return json.Marshal(v, joined)
+		return json.Marshal(v, json.DefaultOptionsV2())
 	}
 	unmarshal := func(data []byte, v any) error {
-		return json.Unmarshal(data, v, joined)
+		return json.Unmarshal(data, v, json.DefaultOptionsV2())
 	}
 	return marshal, unmarshal
 }
@@ -80,10 +62,9 @@ func (ctx WebCtx) DecodeJSON(data []byte, out any) error {
 
 // DecodeJSONStrict は DecodeJSON と同じ設定で、知らないキーと、後ろに続く値を誤りにして読む。
 // v1 では encoding/json の Decoder に DisallowUnknownFields を付けて読み、後ろに値が残れば誤りにする。
-// v2(と JSONOptions)では、その設定に json.RejectUnknownMembers(true) を足して読む。
+// v2 では json.RejectUnknownMembers(true) を足して読む。
 func (ctx WebCtx) DecodeJSONStrict(data []byte, out any) error {
-	opts := ctx.jsonOptions()
-	if len(opts) == 0 {
+	if ctx.jsonMode() == JSONV1 {
 		decoder := jsonv1.NewDecoder(bytes.NewReader(data))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(out); err != nil {
@@ -97,13 +78,13 @@ func (ctx WebCtx) DecodeJSONStrict(data []byte, out any) error {
 		}
 		return nil
 	}
-	return json.Unmarshal(data, out, append(slices.Clone(opts), json.RejectUnknownMembers(true))...)
+	return json.Unmarshal(data, out, json.DefaultOptionsV2(), json.RejectUnknownMembers(true))
 }
 
-func (ctx WebCtx) jsonOptions() []json.Options {
+func (ctx WebCtx) jsonMode() JSONMode {
 	value, ok := ctx.Ctx.(fiber.Ctx).App().State().Get(jsonStateKey)
 	if !ok {
-		panic("gw_web: この app は goutil の NewApp* で作られていない(JSON の設定が無い)")
+		panic("gw_web: この app は goutil の NewApp* で作られていない(JSON のモードが無い)")
 	}
-	return value.(jsonState).opts
+	return value.(JSONMode)
 }

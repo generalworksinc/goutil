@@ -2,7 +2,6 @@ package gw_web
 
 import (
 	"context"
-	"encoding/json/v2"
 	"io"
 	"log"
 	"net"
@@ -132,19 +131,10 @@ type AppSettings struct {
 	// 全リクエストを圧縮したい場合は常に false を返す関数を渡す。
 	// シグネチャは WebCtx ベース(利用側にfiber依存を持ち込まないため)。
 	CompressSkip func(c *WebCtx) bool
-	// JSON は HTTP の JSON を v1 と v2 のどちらで読み書きするか。ゼロ値は JSONV1。
+	// JSON は HTTP の JSON を v1 と v2 のどちらで読み書きするか。ゼロ値は JSONV1(Fiber の既定の encoding/json)。
+	// JSONV2 は encoding/json/v2 を json.DefaultOptionsV2() で使う(map のキーの順は固定しない)。
 	// 対象は BindJSON・content type が JSON の BodyParser・ctx.JSON・DecodeJSON・DecodeJSONStrict など。
-	// v2 へ替えるだけなら、ここを JSONV2 にする。JSONV2 と JSONOptions は同時に指定できない(panic)。
 	JSON JSONMode
-	// JSONOptions は、v2 のオプションを細かく決める時だけ使う(JSON は指定しない)。
-	// 指定すると、Fiber の JSON の読み書き(JSONEncoder/JSONDecoder)を encoding/json/v2 に切り替える。
-	// 対象は BindJSON・content type が JSON の BodyParser・ctx.JSON など。空なら Fiber 既定の encoding/json(v1)のまま。
-	// 渡したオプションは goutil 側で何も足さず、Marshal と Unmarshal の両方にそのまま渡す。
-	// オプションは後ろに置いたものが優先される。
-	// すべて v2 に揃えるだけなら JSON: JSONV2 を使う。v1 から一部だけ挙動を変えるなら、encoding/json の
-	// DefaultOptionsV1() の後ろに、上書きするオプション(例: json.FormatNilSliceAsNull(false))を並べる。
-	// DefaultOptionsV2() は map のキー順を保証しないので、固定したいときは後ろに json.Deterministic(true) を足す。
-	JSONOptions []json.Options
 }
 
 // SkipCompressForStreaming は WebSocket アップグレードと SSE(Accept: text/event-stream)を
@@ -190,9 +180,9 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettin
 			return errorHandler(&WebCtx{Ctx: ctx}, err)
 		},
 	}
-	jsonOpts := resolveJSONOptions(settings)
-	if len(jsonOpts) > 0 {
-		fiberCfg.JSONEncoder, fiberCfg.JSONDecoder = newJSONCodec(jsonOpts)
+	jsonMode := resolveJSONMode(settings)
+	if jsonMode == JSONV2 {
+		fiberCfg.JSONEncoder, fiberCfg.JSONDecoder = newJSONV2Codec()
 	}
 
 	app := fiber.New(fiberCfg)
@@ -202,7 +192,7 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettin
 		}
 	}
 	// AppOption が State を Reset しても消えないよう、AppOption の後に置く(起動後の Reset は支えない)
-	app.State().Set(jsonStateKey, jsonState{opts: jsonOpts})
+	app.State().Set(jsonStateKey, jsonMode)
 	// WS/SSEストリーミングの圧縮は互換性を壊すため、デフォルトで常にスキップする。
 	skip := SkipCompressForStreaming
 	if settings != nil && settings.CompressSkip != nil {

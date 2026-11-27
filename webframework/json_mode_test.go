@@ -1,8 +1,6 @@
 package gw_web
 
 import (
-	jsonv1 "encoding/json"
-	"encoding/json/v2"
 	"net/http"
 	"strings"
 	"testing"
@@ -89,10 +87,9 @@ func wantV2(t *testing.T, r modeResult) {
 
 func TestJSONModeDefaultIsV1(t *testing.T) {
 	for name, settings := range map[string]*AppSettings{
-		"nil":          nil,
-		"zero":         {},
-		"JSONV1":       {JSON: JSONV1},
-		"emptyOptions": {JSONOptions: []json.Options{}},
+		"nil":    nil,
+		"zero":   {},
+		"JSONV1": {JSON: JSONV1},
 	} {
 		t.Run(name, func(t *testing.T) { wantV1(t, probeMode(t, newModeProbeApp(t, settings))) })
 	}
@@ -102,35 +99,9 @@ func TestJSONModeV2(t *testing.T) {
 	wantV2(t, probeMode(t, newModeProbeApp(t, &AppSettings{JSON: JSONV2})))
 }
 
-func TestJSONModeV2MatchesDefaultOptionsV2(t *testing.T) {
-	a := probeMode(t, newModeProbeApp(t, &AppSettings{JSON: JSONV2}))
-	b := probeMode(t, newModeProbeApp(t, &AppSettings{JSONOptions: []json.Options{json.DefaultOptionsV2()}}))
-	if a.out != b.out || a.decodeUpper != b.decodeUpper {
-		t.Fatalf("JSON: JSONV2 と JSONOptions: DefaultOptionsV2() が違う: %+v / %+v", a, b)
-	}
-	for k := range strictBodies {
-		if a.strict[k] != b.strict[k] {
-			t.Errorf("strict %s: %d / %d", k, a.strict[k], b.strict[k])
-		}
-	}
-}
-
-// JSONOptions で細かく決めた設定は、DecodeJSON と DecodeJSONStrict にも同じく効く
-func TestJSONOptionsReachDecodeHelpers(t *testing.T) {
-	app := newModeProbeApp(t, &AppSettings{JSONOptions: []json.Options{jsonv1.DefaultOptionsV1(), json.FormatNilSliceAsNull(false)}})
-	r := probeMode(t, app)
-	if r.out != `{"tags":[]}` || r.decodeUpper != "name=z" {
-		t.Fatalf("out=%s decode(NAME)=%s", r.out, r.decodeUpper)
-	}
-	if r.strict["unknown"] != 400 || r.strict["trailing"] != 400 || r.strict["ok"] != 200 {
-		t.Fatalf("strict: %v", r.strict)
-	}
-}
-
 func TestJSONModeRejectsInvalidSettings(t *testing.T) {
 	for name, settings := range map[string]*AppSettings{
-		"JSONV2 と JSONOptions": {JSON: JSONV2, JSONOptions: []json.Options{json.DefaultOptionsV2()}},
-		"未知のモード":               {JSON: JSONMode(7)},
+		"未知のモード": {JSON: JSONMode(7)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			defer func() {
