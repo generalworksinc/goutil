@@ -36,11 +36,12 @@ func resolveJSONMode(settings *AppSettings) JSONMode {
 	if settings != nil {
 		mode = settings.JSON
 	}
-	if m, ok := jsonmode.Override(); ok {
-		mode = JSONMode(m)
-	}
+	// 上書きの前に確かめる(試験で上書きしていても、本番の設定の誤りを隠さない)
 	if mode != JSONV1 && mode != JSONV2 {
 		panic(fmt.Sprintf("gw_web: 未知の JSONMode %d", mode))
+	}
+	if m, ok := jsonmode.Override(); ok {
+		mode = JSONMode(m)
 	}
 	return mode
 }
@@ -67,6 +68,7 @@ func (ctx WebCtx) DecodeJSON(data []byte, out any) error {
 // DecodeJSONStrict は DecodeJSON と同じ設定で、知らないキーと、後ろに続く値を誤りにして読む。
 // v1 では encoding/json の Decoder に DisallowUnknownFields を付けて読み、後ろに値が残れば誤りにする。
 // v2 では json.RejectUnknownMembers(true) を足して読む。
+// goutil の NewApp* で作った app の要求でだけ使える(モードを app に置いているため。そうでない app では panic する)。
 func (ctx WebCtx) DecodeJSONStrict(data []byte, out any) error {
 	if ctx.jsonMode() == JSONV1 {
 		decoder := jsonv1.NewDecoder(bytes.NewReader(data))
