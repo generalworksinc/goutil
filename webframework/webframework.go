@@ -132,11 +132,16 @@ type AppSettings struct {
 	// 全リクエストを圧縮したい場合は常に false を返す関数を渡す。
 	// シグネチャは WebCtx ベース(利用側にfiber依存を持ち込まないため)。
 	CompressSkip func(c *WebCtx) bool
-	// JSONOptions を指定すると、Fiber の JSON の読み書き(JSONEncoder/JSONDecoder)を encoding/json/v2 に切り替える。
+	// JSON は HTTP の JSON を v1 と v2 のどちらで読み書きするか。ゼロ値は JSONV1。
+	// 対象は BindJSON・content type が JSON の BodyParser・ctx.JSON・DecodeJSON・DecodeJSONStrict など。
+	// v2 へ替えるだけなら、ここを JSONV2 にする。JSONV2 と JSONOptions は同時に指定できない(panic)。
+	JSON JSONMode
+	// JSONOptions は、v2 のオプションを細かく決める時だけ使う(JSON は指定しない)。
+	// 指定すると、Fiber の JSON の読み書き(JSONEncoder/JSONDecoder)を encoding/json/v2 に切り替える。
 	// 対象は BindJSON・content type が JSON の BodyParser・ctx.JSON など。空なら Fiber 既定の encoding/json(v1)のまま。
 	// 渡したオプションは goutil 側で何も足さず、Marshal と Unmarshal の両方にそのまま渡す。
 	// オプションは後ろに置いたものが優先される。
-	// すべて v2 に揃えるなら json.DefaultOptionsV2() を渡す。v1 から一部だけ挙動を変えるなら、encoding/json の
+	// すべて v2 に揃えるだけなら JSON: JSONV2 を使う。v1 から一部だけ挙動を変えるなら、encoding/json の
 	// DefaultOptionsV1() の後ろに、上書きするオプション(例: json.FormatNilSliceAsNull(false))を並べる。
 	// DefaultOptionsV2() は map のキー順を保証しないので、固定したいときは後ろに json.Deterministic(true) を足す。
 	JSONOptions []json.Options
@@ -185,11 +190,13 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettin
 			return errorHandler(&WebCtx{Ctx: ctx}, err)
 		},
 	}
-	if settings != nil && len(settings.JSONOptions) > 0 {
-		fiberCfg.JSONEncoder, fiberCfg.JSONDecoder = newJSONCodec(settings.JSONOptions)
+	jsonOpts := resolveJSONOptions(settings)
+	if len(jsonOpts) > 0 {
+		fiberCfg.JSONEncoder, fiberCfg.JSONDecoder = newJSONCodec(jsonOpts)
 	}
 
 	app := fiber.New(fiberCfg)
+	app.State().Set(jsonStateKey, jsonState{opts: jsonOpts})
 	for _, opt := range opts {
 		if opt != nil {
 			opt(app)
