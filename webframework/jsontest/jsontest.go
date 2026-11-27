@@ -21,7 +21,6 @@ func Build[T any](mode gw_web.JSONMode, build func() T) T {
 	if mode != gw_web.JSONV1 && mode != gw_web.JSONV2 {
 		panic(fmt.Sprintf("jsontest: 未知の JSONMode %d", mode))
 	}
-	restore := jsonmode.Set(int(mode))
-	defer restore()
+	defer jsonmode.Set(int(mode))()
 	return build()
 }
