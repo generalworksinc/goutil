@@ -11,8 +11,9 @@ import (
 )
 
 // Build は build を呼び、その間に goutil の NewApp* で作った app を、AppSettings の JSON・JSONOptions に関わらず mode にする。
-// 設定は app を作る時に決まるので、Build の後もその app は mode のまま。Build の外で作った app には効かない。
-// 上書きはプロセス全体で 1 つなので、build の間に別の goroutine が作った app にも効く。並行に走る試験では使わない。
+// 設定は app を作る時に決まるので、Build の後もその app は mode のまま。Build の前か後に作った app には効かない。
+// 上書きはプロセス全体で 1 つなので、build の間に別の goroutine が作った app にも効く。
+// 並行に Build すると、終わる順によっては上書きが残る。並行に走る試験では使わない。
 func Build[T any](mode gw_web.JSONMode, build func() T) T {
 	if !testing.Testing() {
 		panic("jsontest: 試験の中だけで使う")

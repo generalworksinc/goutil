@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/gofiber/fiber/v3"
 )
 
 type modeProbe struct {
@@ -138,5 +140,22 @@ func TestJSONModeRejectsInvalidSettings(t *testing.T) {
 			}()
 			newModeProbeApp(t, settings)
 		})
+	}
+}
+
+// AppOption が Fiber の State を Reset しても、DecodeJSONStrict は app の設定で読める
+func TestDecodeJSONStrictSurvivesAppOptionStateReset(t *testing.T) {
+	app := NewAppWithSettings(func(ctx *WebCtx, err error) error {
+		return ctx.Status(http.StatusBadRequest).SendString(err.Error())
+	}, &AppSettings{JSON: JSONV2}, func(a *fiber.App) { a.State().Reset() })
+	app.Post("/strict", func(ctx *WebCtx) error {
+		var in modeProbe
+		if err := ctx.DecodeJSONStrict(ctx.Body(), &in); err != nil {
+			return err
+		}
+		return ctx.SendString("name=" + in.Name)
+	})
+	if status, body := doJSONProbe(t, app, http.MethodPost, "/strict", `{"name":"a"}`); status != http.StatusOK || body != "name=a" {
+		t.Fatalf("status=%d body=%s", status, body)
 	}
 }

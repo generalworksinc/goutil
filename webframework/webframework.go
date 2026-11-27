@@ -196,12 +196,13 @@ func newAppInternal(errorHandler func(*WebCtx, error) error, settings *AppSettin
 	}
 
 	app := fiber.New(fiberCfg)
-	app.State().Set(jsonStateKey, jsonState{opts: jsonOpts})
 	for _, opt := range opts {
 		if opt != nil {
 			opt(app)
 		}
 	}
+	// AppOption が State を Reset しても消えないよう、AppOption の後に置く(起動後の Reset は支えない)
+	app.State().Set(jsonStateKey, jsonState{opts: jsonOpts})
 	// WS/SSEストリーミングの圧縮は互換性を壊すため、デフォルトで常にスキップする。
 	skip := SkipCompressForStreaming
 	if settings != nil && settings.CompressSkip != nil {

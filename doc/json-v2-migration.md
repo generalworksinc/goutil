@@ -50,6 +50,7 @@ Go 1.27 で確かめた違いです。左の列の変化ごとに、切り替え
 Fiber の `JSONEncoder` と `JSONDecoder` を通る経路だけが替わります(README に一覧があります)。次は替わらないので、1 つずつ「揃えるか、v1 のまま残すか」を決めます。数えるときは、関数の名前で grep し、呼ぶ所の数まで出します。名前から用途を推測して範囲を狭めないでください。
 
 - **自前の読み込み。** `json.Unmarshal` や、`json.NewDecoder` と `DisallowUnknownFields` で本文を読む関数は、v1 のままです。HTTP の本文を読むなら、`ctx.DecodeJSON`(app の設定で読む)か `ctx.DecodeJSONStrict`(知らないキーと後ろに続く値を断る)に替えます。どちらも要求を受けた app の設定で読むので、1 つのプロセスに v1 と v2 の app があっても混ざりません。
+  - `DecodeJSONStrict` は、v1 でも後ろに続く値を断ります。`DisallowUnknownFields` を付けた `Decode` を 1 回だけ呼んでいた所(後ろの値を見ない)を替えると、それだけで v1 の挙動が変わります。差の試験の PR で本番の挙動を保つなら、その所は別の commit で意図した変更として替えるか、切り替えの PR で替えます。
 - **HTTP 以外の入力。** AI のツールの引数のように、同じ関数で HTTP 以外の JSON も読んでいるときは、その呼び出しを HTTP の設定から外します。HTTP の切り替えで、別の契約まで変わらないようにするためです。
 - **直接 `encoding/json` を呼ぶ所。** ETag の元にする本文、ログの生の JSON、WebSocket と NDJSON の自前の読み書き、誤りの本文の書き直しなどです。
 - **SharedStorage に保存済みのデータ。** 替えた後に読み戻せるかを確かめます。
@@ -76,16 +77,18 @@ gw_web.NewAppWithSettings(errorHandler, &gw_web.AppSettings{JSON: JSONMode})
 
 ### v1 と v2 の差の試験
 
-同じ要求を v1 の app と v2 の app へ送り、応答の差を一覧(golden のファイル)と比べます。app は、本番と同じ組み立ての関数を `jsontest.Build` の中で呼んで作ります。
+同じ要求を v1 の app と v2 の app へ送り、応答の差を一覧(golden のファイル)と比べます。一覧は「v2 へ替えると変わる契約」そのものになるので、1 行ずつ採るか直すかを決めます。
+
+app は、本番と同じ組み立ての関数を `jsontest.Build` の中で呼んで作ります。`jsontest.Build` は、その間に goutil の `NewApp*` で作った app を、`AppSettings` に関わらず指定のモードにします。上書きはプロセス全体で 1 つなので、並行に走る試験では使いません。
 
 ```go
-v1 := jsontest.Build(gw_web.JSONV1, application.BuildApp)
-v2 := jsontest.Build(gw_web.JSONV2, application.BuildApp)
+// v1 の app を作り、要求を送り、保存した値まで集めて片付けてから、v2 の app を作る
+v1 := runContract(t, jsontest.Build(gw_web.JSONV1, application.BuildApp))
+v2 := runContract(t, jsontest.Build(gw_web.JSONV2, application.BuildApp))
 ```
 
-`jsontest.Build` は、その間に goutil の `NewApp*` で作った app を、`AppSettings` に関わらず指定のモードにします。上書きはプロセス全体で 1 つなので、並行に走る試験では使いません。
-
-- **上書きが届いているかを確かめる試験**を置きます。組み立ての関数が app を作り置きしていると、`jsontest.Build` の上書きが届かず、両方とも v1 で比べてしまいます。v1 と v2 で結果が違う本文(大文字のキーなど)を、それぞれの app の本物のルートへ送り、モードどおりの結果になることを確かめます。一覧は「v2 へ替えると変わる契約」そのものになるので、1 行ずつ採るか直すかを決めます。
+- **組み立ての関数が DB の接続をパッケージの変数に置くなら、2 つの app を先に作らない。** 2 回目の組み立てが接続を上書きし、先に作った v1 の app も v2 の DB を使います。上の例のように、v1 の試しを終えて片付けてから v2 の app を作ります。
+- **上書きが届いているかを確かめる試験**を置きます。組み立ての関数が app を作り置きしていると、`jsontest.Build` の上書きが届かず、両方とも v1 で比べてしまいます。v1 と v2 で結果が違う本文(大文字のキーなど)を、それぞれの app の本物のルートへ送り、モードどおりの結果になることを確かめます。
 
 比べ方の約束です。
 
