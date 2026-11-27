@@ -76,3 +76,12 @@ func TestBuildRestoresAfterPanic(t *testing.T) {
 		t.Fatalf("panic の後も上書きが残っている: %s", got)
 	}
 }
+
+func TestBuildDoesNotHideInvalidSettings(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("未知の JSONMode は、jsontest.Build の中でも panic するはず")
+		}
+	}()
+	jsontest.Build(gw_web.JSONV2, func() *gw_web.WebApp { return newApp(&gw_web.AppSettings{JSON: gw_web.JSONMode(7)}) })
+}
