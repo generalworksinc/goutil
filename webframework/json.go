@@ -23,6 +23,10 @@ const (
 	JSONV2
 )
 
+// ErrTrailingJSONValue は、DecodeJSONStrict(v1)で、本文の値の後ろに別の JSON の値が続いた時の誤り。
+// 後ろが JSON として壊れている時は、encoding/json の SyntaxError を返す。v2 では、どちらも jsontext.SyntacticError になる。
+var ErrTrailingJSONValue = errors.New("unexpected trailing JSON value")
+
 const jsonStateKey = "github.com/generalworksinc/goutil/webframework.json"
 
 // resolveJSONMode は、app が使うモードを決める。
@@ -72,7 +76,7 @@ func (ctx WebCtx) DecodeJSONStrict(data []byte, out any) error {
 		}
 		if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 			if err == nil {
-				return errors.New("unexpected trailing JSON value")
+				return ErrTrailingJSONValue
 			}
 			return err
 		}

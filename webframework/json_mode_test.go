@@ -1,6 +1,7 @@
 package gw_web
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -128,5 +129,24 @@ func TestDecodeJSONStrictSurvivesAppOptionStateReset(t *testing.T) {
 	})
 	if status, body := doJSONProbe(t, app, http.MethodPost, "/strict", `{"name":"a"}`); status != http.StatusOK || body != "name=a" {
 		t.Fatalf("status=%d body=%s", status, body)
+	}
+}
+
+// v1 で後ろに正しい JSON の値が続いた時は ErrTrailingJSONValue。利用側が誤りの種類で応答の文を分けられるように
+func TestDecodeJSONStrictTrailingValueError(t *testing.T) {
+	app := NewAppWithSettings(func(ctx *WebCtx, err error) error {
+		if errors.Is(err, ErrTrailingJSONValue) {
+			return ctx.Status(http.StatusBadRequest).SendString("trailing")
+		}
+		return ctx.Status(http.StatusBadRequest).SendString("other")
+	}, nil)
+	app.Post("/strict", func(ctx *WebCtx) error {
+		var in modeProbe
+		return ctx.DecodeJSONStrict(ctx.Body(), &in)
+	})
+	for body, want := range map[string]string{`{"name":"a"} {}`: "trailing", `{"name":"a"} 1`: "trailing", `{"name":"a"} x`: "other"} {
+		if _, got := doJSONProbe(t, app, http.MethodPost, "/strict", body); got != want {
+			t.Errorf("%s: want %s got %s", body, want, got)
+		}
 	}
 }

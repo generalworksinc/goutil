@@ -31,7 +31,7 @@ gw_web.NewAppWithSettings(errorHandler, &gw_web.AppSettings{JSON: gw_web.JSONV2}
 
 モードは v1 と v2 の 2 つだけです。v2 のオプションは `DefaultOptionsV2()` に固定し、個別には選べません。v2 の既定では map のキーの順を保証しないので、順番に意味がある物は配列で返します。
 
-要求の本文に入れ子になった JSON の文字列などを、`BindJSON` を通さずに読む時は `ctx.DecodeJSON(data, &v)` を使います。知らないキーと、後ろに続く値を断るなら `ctx.DecodeJSONStrict(data, &v)` です。どちらも要求を受けた app のモードで読みます。DB の列や外の API の応答など、HTTP の外の JSON には使いません。
+要求の本文に入れ子になった JSON の文字列などを、`BindJSON` を通さずに読む時は `ctx.DecodeJSON(data, &v)` を使います。知らないキーと、後ろに続く値を断るなら `ctx.DecodeJSONStrict(data, &v)` です(v1 で後ろに別の値が続いた時の誤りは `gw_web.ErrTrailingJSONValue`)。どちらも要求を受けた app のモードで読みます。DB の列や外の API の応答など、HTTP の外の JSON には使いません。
 
 試験で、本番と同じ組み立ての app を v1 と v2 の両方で作って比べる時は、`webframework/jsontest` の `jsontest.Build(gw_web.JSONV2, build)` を使います。
 
